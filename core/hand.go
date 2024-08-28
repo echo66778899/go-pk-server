@@ -1,26 +1,5 @@
 package engine
 
-// Hand ranking constants.
-type HandRank int
-
-const (
-	HighCard HandRank = iota
-	OnePair
-	TwoPair
-	ThreeOfAKind
-	Straight
-	Flush
-	FullHouse
-	FourOfAKind
-	StraightFlush
-	RoyalFlush
-)
-
-func (r HandRank) String() string {
-	return [...]string{"HighCard", "OnePair", "TwoPair", "ThreeOfAKind", "Straight",
-		"Flush", "FullHouse", "FourOfAKind", "StraightFlush", "RoyalFlush"}[r]
-}
-
 // Hand represents a hand of cards.
 type Hand struct {
 	cards          [2]Card
@@ -66,10 +45,7 @@ func (h *Hand) CalcBestHand(cc *CommunityCards) (bestRank HandRank) {
 func (h *Hand) BestHand() string {
 	var cardsString string
 	for _, card := range h.bestHand {
-		if cardsString != "" {
-			cardsString += ", "
-		}
-		cardsString += card.String()
+		cardsString += "(" + card.String() + ")"
 	}
 	return cardsString
 }

@@ -2,6 +2,27 @@ package engine
 
 import "sort"
 
+// Hand ranking constants.
+type HandRank int
+
+const (
+	HighCard HandRank = iota
+	OnePair
+	TwoPair
+	ThreeOfAKind
+	Straight
+	Flush
+	FullHouse
+	FourOfAKind
+	StraightFlush
+	RoyalFlush
+)
+
+func (r HandRank) String() string {
+	return [...]string{"HighCard", "OnePair", "TwoPair", "ThreeOfAKind", "Straight",
+		"Flush", "FullHouse", "FourOfAKind", "StraightFlush", "RoyalFlush"}[r]
+}
+
 func combinations(cards []Card, n int) [][]Card {
 	var result [][]Card
 	var comb func(start int, chosen []Card)
@@ -19,6 +40,7 @@ func combinations(cards []Card, n int) [][]Card {
 	comb(0, []Card{})
 	return result
 }
+
 func countValues(cards []Card) map[int]int {
 	valueCount := make(map[int]int)
 	for _, card := range cards {
@@ -26,6 +48,7 @@ func countValues(cards []Card) map[int]int {
 	}
 	return valueCount
 }
+
 func isFlush(cards []Card) bool {
 	firstSuit := cards[0].Suit
 	for _, card := range cards {
@@ -35,6 +58,7 @@ func isFlush(cards []Card) bool {
 	}
 	return true
 }
+
 func isStraight(cards []Card) bool {
 	values := []int{}
 	for _, card := range cards {
@@ -57,6 +81,15 @@ func isStraight(cards []Card) bool {
 	return true
 }
 
+func getSortedValues(cards []Card) []int {
+	values := []int{}
+	for _, card := range cards {
+		values = append(values, int(card.Value))
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(values)))
+	return values
+}
+
 func evaluateHand(cards []Card) (HandRank, []int) {
 	valueCount := countValues(cards)
 
@@ -66,8 +99,9 @@ func evaluateHand(cards []Card) (HandRank, []int) {
 
 	// Royal Flush or Straight Flush
 	if flush && straight {
-		if cards[0].Value == 10 && cards[1].Value == 11 && cards[2].Value == 12 && cards[3].Value == 13 && cards[4].Value == 14 {
-			return RoyalFlush, []int{14} // Highest card is Ace in a Royal Flush
+		if cards[0].Value == Ten && cards[1].Value == Jack &&
+			cards[2].Value == Queen && cards[3].Value == King && cards[4].Value == Ace {
+			return RoyalFlush, []int{int(Ace)} // Highest card is Ace in a Royal Flush
 		}
 		return StraightFlush, []int{int(cards[4].Value)} // Highest card in the straight flush
 	}
@@ -127,15 +161,6 @@ func evaluateHand(cards []Card) (HandRank, []int) {
 
 	// High Card
 	return HighCard, getSortedValues(cards)
-}
-
-func getSortedValues(cards []Card) []int {
-	values := []int{}
-	for _, card := range cards {
-		values = append(values, int(card.Value))
-	}
-	sort.Sort(sort.Reverse(sort.IntSlice(values)))
-	return values
 }
 
 func compareTiebreakers(tiebreaker1, tiebreaker2 []int) int {

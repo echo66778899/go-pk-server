@@ -40,7 +40,9 @@ const (
 
 // overwrite string method for Value
 func (v Value) String() string {
-	return [...]string{"Joker", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Jack", "Queen", "King", "Ace"}[v]
+	return [...]string{"Joker", "Two", "Three", "Four",
+		"Five", "Six", "Seven", "Eight", "Nine", "Ten",
+		"Jack", "Queen", "King", "Ace"}[v]
 }
 
 type Card struct {
@@ -74,19 +76,19 @@ func NewDeck() *Deck {
 }
 
 func (d *Deck) Shuffle() {
-	rand.Seed(time.Now().UnixNano())
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for i := len(d.Cards) - 1; i > 0; i-- {
-		j := rand.Intn(i + 1)
+		j := rng.Intn(i + 1)
 		d.Cards[i], d.Cards[j] = d.Cards[j], d.Cards[i]
 	}
 	d.Dealed = 0
 }
 
 // Cut the deck at a random position
-func (d *Deck) Cut() {
-	rand.Seed(time.Now().UnixNano())
-	cutIndex := rand.Intn(len(d.Cards))
+func (d *Deck) CutTheCard() {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	cutIndex := rng.Intn(len(d.Cards))
 	d.Cards = append(d.Cards[cutIndex:], d.Cards[:cutIndex]...)
 }
 
@@ -104,10 +106,7 @@ type CommunityCards struct {
 func (c CommunityCards) String() string {
 	var cardsString string
 	for _, card := range c.Cards {
-		if cardsString != "" {
-			cardsString += ", "
-		}
-		cardsString += card.String()
+		cardsString += "[" + card.String() + "]"
 	}
 	return cardsString
 }

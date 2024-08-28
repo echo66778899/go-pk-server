@@ -1,58 +1,53 @@
 package main
 
 import (
-	"time"
-
-	engine "github.com/haiphan1811/go-pk-server/game"
+	engine "go-pk-server/core"
 )
 
 func main() {
 	game := engine.NewGameEngine()
-	game.StartGame()
+	game.StartEngine()
 
 	// Create 4 players
-	player1 := engine.NewPlayer(1, "Player 1")
-	player2 := engine.NewPlayer(2, "Player 2")
-	player3 := engine.NewPlayer(3, "Player 3")
-	player4 := engine.NewPlayer(4, "Player 4")
+	player1 := engine.NewOnlinePlayer("A", 123)
+	player2 := engine.NewOnlinePlayer("B", 456)
+	player3 := engine.NewOnlinePlayer("C", 789)
+	player4 := engine.NewOnlinePlayer("D", 101)
 
-	time.Sleep(1 * time.Second)
+	// Add chips to players
+	player1.AddChips(1000)
+	player2.AddChips(1000)
+	player3.AddChips(1000)
+	player4.AddChips(1000)
+
+	game.StartGame()
 	// For loop to simulate players joining the game and start the game and send actions
-	game.PlayerJoin(1, player1)
-	game.PlayerJoin(1, player2)
-	game.PlayerJoin(1, player3)
-	game.PlayerJoin(1, player4)
+	game.PlayerJoin(player1)
+	game.PlayerJoin(player2)
+	game.PlayerJoin(player3)
+	game.PlayerJoin(player4)
 
 	game.Ready()
+	game.DumpGameState()
 
-	time.Sleep(1 * time.Second)
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 0, Type: engine.Bet, Bet: 100})
-	game.PlayerAction(2, engine.PlayerAction{PlayerIdx: 1, Type: engine.Call})
-	game.PlayerAction(3, engine.PlayerAction{PlayerIdx: 2, Type: engine.Call})
-	game.PlayerAction(4, engine.PlayerAction{PlayerIdx: 3, Type: engine.Call})
+	// Player 1 action
+	game.PlayerAction(engine.NewCheckAction(player1.Position()))
+	game.PlayerAction(engine.NewBetAction(player2.Position(), 10))
+	game.PlayerAction(engine.NewFoldAction(player3.Position(), 0))
+	game.PlayerAction(engine.NewCallAction(player4.Position()))
+	game.PlayerAction(engine.NewCallAction(player1.Position()))
 
-	time.Sleep(1 * time.Second)
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 0, Type: engine.Check})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 1, Type: engine.Bet, Bet: 100})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 2, Type: engine.Raise, Bet: 100})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 3, Type: engine.Call})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 0, Type: engine.Call})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 1, Type: engine.Call})
+	game.DumpGameState()
 
-	time.Sleep(2 * time.Second)
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 0, Type: engine.Check})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 1, Type: engine.Bet, Bet: 100})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 2, Type: engine.Fold})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 3, Type: engine.Call})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 0, Type: engine.Fold})
+	// Round Flop
+	game.PlayerAction(engine.NewCheckAction(player1.Position()))
+	game.PlayerAction(engine.NewCheckAction(player4.Position()))
+	game.PlayerAction(engine.NewCheckAction(player1.Position()))
+	game.PlayerAction(engine.NewCheckAction(player2.Position()))
 
-	time.Sleep(1 * time.Second)
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 1, Type: engine.Check})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 3, Type: engine.Bet, Bet: 200})
-	game.PlayerAction(1, engine.PlayerAction{PlayerIdx: 1, Type: engine.Call})
-
-	// loop to avoid exit, you can remove this loop if you want
-	for {
-		time.Sleep(1 * time.Second)
-	}
+	// Round Turn
+	game.PlayerAction(engine.NewCheckAction(player4.Position()))
+	game.PlayerAction(engine.NewCheckAction(player1.Position()))
+	game.PlayerAction(engine.NewCheckAction(player2.Position()))
+	game.PlayerAction(engine.NewCheckAction(player4.Position()))
 }
