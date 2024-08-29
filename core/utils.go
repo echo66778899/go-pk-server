@@ -1,12 +1,14 @@
 package engine
 
+// Game utils for poker
+
 import "sort"
 
 // Hand ranking constants.
-type HandRank int
+type HandRanking int
 
 const (
-	HighCard HandRank = iota
+	HighCard HandRanking = iota
 	OnePair
 	TwoPair
 	ThreeOfAKind
@@ -18,9 +20,9 @@ const (
 	RoyalFlush
 )
 
-func (r HandRank) String() string {
+func (phr HandRanking) String() string {
 	return [...]string{"HighCard", "OnePair", "TwoPair", "ThreeOfAKind", "Straight",
-		"Flush", "FullHouse", "FourOfAKind", "StraightFlush", "RoyalFlush"}[r]
+		"Flush", "FullHouse", "FourOfAKind", "StraightFlush", "RoyalFlush"}[phr]
 }
 
 func combinations(cards []Card, n int) [][]Card {
@@ -90,7 +92,7 @@ func getSortedValues(cards []Card) []int {
 	return values
 }
 
-func evaluateHand(cards []Card) (HandRank, []int) {
+func evaluateHand(cards []Card) (HandRanking, []int) {
 	valueCount := countValues(cards)
 
 	// Check for flush and straight

@@ -41,15 +41,15 @@ func TestHand(t *testing.T) {
 
 	// Ensure that the string representation of the hand rank is correct
 	expectedRankString := "Straight"
-	rankString := hand.HandRankString()
+	rankString := hand.HandRankingString()
 	if rankString != expectedRankString {
 		t.Errorf("Expected hand rank string to be %s, but got %s", expectedRankString, rankString)
 	}
 }
 
-func TestHandRank(t *testing.T) {
+func TestHandRanking(t *testing.T) {
 	// Create a new hand rank
-	rank := HandRank(3)
+	rank := HandRanking(3)
 
 	// Ensure that the string representation of the hand rank is correct
 	expectedString := "ThreeOfAKind"

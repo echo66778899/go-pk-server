@@ -1,32 +1,32 @@
 package engine
 
-// Hand represents a hand of cards.
+// Hand represents a hand of playerCards.
 type Hand struct {
-	cards          [2]Card
-	calRank        HandRank
+	playerCards    [2]Card
+	itsRank        HandRanking
 	bestHand       []Card
 	bestTiebreaker []int
 }
 
 func (h Hand) String() string {
-	return h.cards[0].String() + ", " + h.cards[1].String()
+	return h.playerCards[0].String() + ", " + h.playerCards[1].String()
 }
 
 func (h *Hand) SetCard(card Card, idx int) {
-	h.cards[idx] = card
+	h.playerCards[idx] = card
 }
 
 func (h *Hand) Reset() {
-	h.cards = [2]Card{}
-	h.calRank = HandRank(-1)
+	h.playerCards = [2]Card{}
+	h.itsRank = HandRanking(-1)
 	h.bestHand = []Card{}
 	h.bestTiebreaker = []int{}
 }
 
-func (h *Hand) CalcBestHand(cc *CommunityCards) (bestRank HandRank) {
-	// Find all possible combinations of 5 cards from the hand and community cards
-	bestRank = HandRank(-1)
-	allCards := append(h.cards[:], cc.Cards...)
+func (h *Hand) Evaluate(cc *CommunityCards) (bestRank HandRanking) {
+	// Find all possible combinations of 5 playerCards from the hand and community playerCards
+	bestRank = HandRanking(-1)
+	allCards := append(h.playerCards[:], cc.Cards...)
 	allCombinations := combinations(allCards, 5)
 
 	// Find the best hand rank among all combinations
@@ -38,18 +38,35 @@ func (h *Hand) CalcBestHand(cc *CommunityCards) (bestRank HandRank) {
 			h.bestHand = comb
 		}
 	}
-	h.calRank = bestRank
+	h.itsRank = bestRank
 	return
 }
 
 func (h *Hand) BestHand() string {
 	var cardsString string
 	for _, card := range h.bestHand {
-		cardsString += "(" + card.String() + ")"
+		if cardsString != "" {
+			cardsString += ", "
+		}
+		cardsString += card.String()
 	}
 	return cardsString
 }
 
-func (h *Hand) HandRankString() string {
-	return h.calRank.String()
+func (h *Hand) HandRankingString() string {
+	return h.itsRank.String()
+}
+
+func (h *Hand) Kicker() []int {
+	return h.bestTiebreaker
+}
+
+func (h *Hand) Compare(otherHand *Hand) int {
+	if h.itsRank > otherHand.itsRank {
+		return 1
+	} else if h.itsRank < otherHand.itsRank {
+		return -1
+	}
+
+	return compareTiebreakers(h.bestTiebreaker, otherHand.bestTiebreaker)
 }
