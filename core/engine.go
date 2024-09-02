@@ -14,12 +14,17 @@ const (
 	PlayerJoined
 	PlayerLeft
 	PlayerReady
-	NextEngState
+	GameStarted
 	GameEnded
 	PlayerActed
-	NextRound
+	NextGame
 	UpdatePlayer
 )
+
+func (at ActionType) String() string {
+	return [...]string{"Unspecified", "PlayerJoined", "PlayerLeft",
+		"PlayerReady", "GameStarted", "GameEnded", "PlayerActed", "NextGame", "UpdatePlayer"}[at]
+}
 
 type Action struct {
 	// Common fields for all actions
@@ -31,10 +36,11 @@ type Action struct {
 
 // GameEngine represents the game engine.
 type GameEngineIf interface {
-	StartEngine()
+	StartEngine(bool)
 	StopEngine()
 	PlayerJoin(player Player)
 	StartGame()
+	NextGame()
 	Ready()
 	PlayerAction(action ActionIf)
 }
@@ -42,7 +48,7 @@ type GameEngineIf interface {
 type EngineState int
 
 const (
-	RoomCreated EngineState = iota
+	TableCreated EngineState = iota
 	WaitForPlayers
 	WaitForPlayerActions
 	WaitForNextRound
@@ -50,13 +56,13 @@ const (
 
 // Overwrite string method for EngineState
 func (e EngineState) String() string {
-	return [...]string{"RoomCreated", "WaitForPlayers", "WaitForPlayerActions", "WaitForNextRound"}[e]
+	return [...]string{"TableCreated", "WaitForPlayers", "WaitForPlayerActions", "WaitForNextRound"}[e]
 }
 
 type GameEngine struct {
 	gameSessionID int
 	State         GameState
-	playerMgr     *PlayerManager
+	playerMgr     *TableManager
 	game          *Game
 
 	eState      EngineState
@@ -72,22 +78,25 @@ func NewGameEngine() GameEngineIf {
 	// Add your initialization code here
 	return &GameEngine{
 		gameSessionID: 1,
-		eState:        RoomCreated,
+		eState:        TableCreated,
 		eventDriven:   false,
 		State:         GameState{},
-		playerMgr:     NewPlayerManager(8),
+		playerMgr:     NewTableManager(8),
 		ActionChannel: make(chan Action, 10), // Change to buffered channel with capacity 10
 
 	}
 }
 
 // StartEngine starts the game.
-func (g *GameEngine) StartEngine() {
+func (g *GameEngine) StartEngine(e bool) {
+	g.eventDriven = e
 	// Run the game engine with go routine
 	if g.eventDriven {
 		g.ctx, g.cancel = context.WithCancel(context.Background())
 		go g.EngineLoop(g.ctx)
 	}
+	act := Action{Type: ActionType(WaitForPlayers)}
+	g.processActions(act)
 }
 
 func (g *GameEngine) StopEngine() {
@@ -105,7 +114,15 @@ func (g *GameEngine) StartGame() {
 	// Log the game start
 	fmt.Println("Game started")
 	// send action to start the game
-	act := Action{Type: ActionType(WaitForPlayers)}
+	act := Action{Type: ActionType(GameStarted)}
+	g.processActions(act)
+}
+
+func (g *GameEngine) NextGame() {
+	// Log the next game
+	fmt.Println("Next game")
+	// send action to start the next game
+	act := Action{Type: NextGame}
 	g.processActions(act)
 }
 
@@ -143,8 +160,9 @@ func (g *GameEngine) EngineLoop(ctx context.Context) {
 }
 
 func (g *GameEngine) RunGameEngine(action Action) {
+	fmt.Printf("\n===============\n---------------\nCURRENT ENG STATE: %v - Event: %v\n---------------\n", g.eState, action)
 	switch g.eState {
-	case RoomCreated:
+	case TableCreated:
 		// Room is created log
 		g.HandleRoomCreated()
 		g.eState = WaitForPlayers
@@ -152,7 +170,7 @@ func (g *GameEngine) RunGameEngine(action Action) {
 		// Wait for players to join
 		if action.Type == PlayerJoined && action.PlayerInfo != nil {
 			g.HandleWaitForPlayers(action.PlayerInfo)
-		} else if action.Type == PlayerReady {
+		} else if action.Type == PlayerReady || action.Type == GameStarted {
 			g.game = NewGame(GameSetting{
 				NumPlayers:   g.playerMgr.numberOfSlots,
 				MaxStackSize: 1000,
@@ -165,8 +183,13 @@ func (g *GameEngine) RunGameEngine(action Action) {
 			g.eState = WaitForPlayerActions
 		}
 	case WaitForPlayerActions:
-		if action.Type == PlayerActed {
+		switch action.Type {
+		case PlayerActed:
 			g.game.HandleActions(action.PlayerAct)
+		case NextGame:
+			g.game.NextGame()
+		case UpdatePlayer:
+			g.eState = WaitForPlayers
 		}
 	case WaitForNextRound:
 		// Game over
@@ -177,12 +200,9 @@ func (g *GameEngine) RunGameEngine(action Action) {
 
 func (g *GameEngine) NotifyGameState() {
 	// Todo: If game state has changed, notify the clients
-
-	// Log the current game state
-	fmt.Printf("===============\nCurrent game state: %v\n", g.eState)
 }
 
-// HandleRoomCreated handles the RoomCreated state.
+// HandleRoomCreated handles the TableCreated state.
 func (g *GameEngine) HandleRoomCreated() {
 }
 
