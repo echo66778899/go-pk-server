@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"go-pk-server/client/ui"
+	engine "go-pk-server/core"
 	sync_msg "go-pk-server/msg"
 
 	"github.com/gorilla/websocket"
@@ -16,6 +18,16 @@ type CMessage struct {
 }
 
 func main() {
+	cards := []engine.Card{
+		{Value: engine.Ace, Suit: engine.Clubs},
+		{Value: engine.Jack, Suit: engine.Hearts},
+		{Value: engine.Three, Suit: engine.Clubs},
+		{Value: engine.Ten, Suit: engine.Diamonds},
+		{Value: engine.Five, Suit: engine.Spades},
+	}
+	ui.PrintBoard(cards)
+
+	return
 	// Connect to the WebSocket server
 	ws, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/ws", nil)
 	if err != nil {

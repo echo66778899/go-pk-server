@@ -46,8 +46,8 @@ func (v Value) String() string {
 }
 
 type Card struct {
-	Suit  Suit
-	Value Value
+	Suit  Suit  `json:"suit"`
+	Value Value `json:"value"`
 }
 
 func (s Card) String() string {

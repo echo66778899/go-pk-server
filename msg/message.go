@@ -26,18 +26,18 @@ type CommunicationMessage struct {
 	Payload interface{}     `json:"payload"`
 }
 
-// control message struct for start game, end game, etc.
-type ControlMessage struct {
-	ControlType string `json:"control_type"`
-	Data        string `json:"data"`
-}
-
 // AuthenMessage represents the authentication JSON message from the client to the server.
 type AuthenMessage struct {
 	Username string `json:"username"`
 	Room     string `json:"room"`
 	Passcode string `json:"passcode"`
 	Session  string `json:"session"` // Emtpty string for first time connection
+}
+
+// control message struct for start game, end game, etc.
+type ControlMessage struct {
+	ControlType string `json:"control_type"`
+	Data        string `json:"data"`
 }
 
 // Player Action message struct
