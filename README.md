@@ -10,13 +10,13 @@ Welcome to the Poker Game Server project! This server is designed to handle the 
 
 ## Getting Started
 ### Prerequisites
-Go 1.23 or higher: Ensure you have Go installed. You can download it from golang.org.
+Go 1.23 or higher: Ensure you have Go installed. You can download it from `golang.org`.
 ### Installation
 Clone the repository to your local machine:
 
 ```
-git clone https://github.com/yourusername/poker-game-server.git
-cd poker-game-server
+git clone https://github.com/haiphan1811/go-pk-server.git
+cd go-pk-server
 ```
 
 Install the required dependencies:
