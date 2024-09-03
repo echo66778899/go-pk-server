@@ -38,6 +38,13 @@ func NewGame(setting GameSetting, tm *TableManager, d *Deck) *Game {
 }
 
 func (g *Game) Play() {
+	// Check if the number of players is valid
+	if g.tm.GetNumberOfPlayers() < 2 {
+		// Log error when the number of players is less than 2
+		fmt.Println("error: Number of players is less than 2")
+		return
+	}
+
 	fmt.Printf("\n\n\n\nStarting a new game with %d players\n", g.tm.GetNumberOfPlayers())
 	// Start the game
 	g.tm.ResetForNewGame()
@@ -216,7 +223,13 @@ func (g *Game) resetGameStateForNewRound() {
 func (g *Game) updateDealerPostion() {
 	if g.TotalHandsPlayed == 0 {
 		// Select the first dealer, choose the player next to the last player
-		g.gs.ButtonPosition = g.tm.NextPlayer(g.tm.GetMaxNoSlot()-1, Playing).Position()
+		p := g.tm.NextPlayer(g.tm.GetMaxNoSlot()-1, Playing)
+		if p == nil {
+			// Log error when selecting the first dealer
+			fmt.Println("error: Can not select the first dealer")
+			return
+		}
+		g.gs.ButtonPosition = p.Position()
 		fmt.Printf("Selecting the first dealer: %s\n", g.tm.GetPlayer(g.gs.ButtonPosition).Name())
 		return
 	}
@@ -229,6 +242,12 @@ func (g *Game) updateDealerPostion() {
 func (g *Game) takeBlinds() {
 	sbPlayer := g.tm.NextPlayer(g.gs.ButtonPosition, Playing)
 	bbPlayer := g.tm.NextPlayer(sbPlayer.Position(), Playing)
+
+	if sbPlayer == nil || bbPlayer == nil {
+		// Log error when taking blinds
+		fmt.Println("error: Can not take blinds")
+		return
+	}
 
 	sbPlayer.TakeChips(g.SmallBlind)
 	sbPlayer.UpdateCurrentBet(g.SmallBlind)

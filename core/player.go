@@ -46,12 +46,10 @@ type OnlinePlayer struct {
 }
 
 // NewOnlinePlayer creates a new online player.
-func NewOnlinePlayer(name string, id, slot int) *OnlinePlayer {
+func NewOnlinePlayer(name string, id int) *OnlinePlayer {
 	return &OnlinePlayer{
-		name:     name,
-		id:       id,
-		position: slot,
-		chips:    0,
+		name: name,
+		id:   id,
 		//networkClient: networkClient,
 	}
 }

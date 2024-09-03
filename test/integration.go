@@ -28,11 +28,16 @@ func main() {
 	game.StartEngine(false)
 
 	// Create 4 players
-	playerA := pk_eng.NewOnlinePlayer("A", 123, 0)
-	playerB := pk_eng.NewOnlinePlayer("B", 456, 1)
-	playerC := pk_eng.NewOnlinePlayer("C", 789, 3)
-	playerD := pk_eng.NewOnlinePlayer("D", 101, 5)
-	playerE := pk_eng.NewOnlinePlayer("E", 121, 6)
+	playerA := pk_eng.NewOnlinePlayer("A", 123)
+	playerA.UpdatePosition(0)
+	playerB := pk_eng.NewOnlinePlayer("B", 456)
+	playerB.UpdatePosition(1)
+	playerC := pk_eng.NewOnlinePlayer("C", 789)
+	playerC.UpdatePosition(3)
+	playerD := pk_eng.NewOnlinePlayer("D", 101)
+	playerD.UpdatePosition(5)
+	playerE := pk_eng.NewOnlinePlayer("E", 121)
+	playerE.UpdatePosition(6)
 
 	// Append players to a slice
 	players := []*pk_eng.OnlinePlayer{playerA, playerB, playerC, playerD, playerE}

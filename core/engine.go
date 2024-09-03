@@ -28,15 +28,15 @@ func (at ActionType) String() string {
 
 type Action struct {
 	// Common fields for all actions
-	Type ActionType
+	Type       ActionType `json:"type"`
+	PlayerInfo Player     `json:"player_info"`
 	// Possible fields for an action
-	PlayerAct  ActionIf
-	PlayerInfo Player
+	PlayerAct ActionIf
 }
 
 // GameEngine represents the game engine.
 type GameEngineIf interface {
-	StartEngine(bool)
+	StartEngine(bool) // Start the game engine with event driven mode (true) or synchronous mode (false)
 	StopEngine()
 	PlayerJoin(player Player)
 	StartGame()
@@ -72,6 +72,8 @@ type GameEngine struct {
 	cancel        context.CancelFunc
 	ActionChannel chan Action
 }
+
+var MyGame = NewGameEngine()
 
 // NewGameEngine creates a new instance of the game engine.
 func NewGameEngine() GameEngineIf {
