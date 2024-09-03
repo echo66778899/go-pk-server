@@ -82,6 +82,8 @@ func (c *WebSocketClient) DispatchRoutine() {
 }
 
 func (c *WebSocketClient) SendMessage(message []byte) {
+	// log message
+	fmt.Println("Sending message:", string(message))
 	c.dispatchQueue <- message
 }
 

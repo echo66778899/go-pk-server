@@ -41,7 +41,7 @@ func (cm *ConnectionManager) ServeWebSocket(w http.ResponseWriter, r *http.Reque
 }
 
 func (cm *ConnectionManager) StartServer(addr string) error {
-	http.HandleFunc("/", cm.ServeWebSocket)
+	http.HandleFunc("/ws", cm.ServeWebSocket)
 	return http.ListenAndServe(addr, nil)
 }
 
@@ -54,5 +54,19 @@ func (cm *ConnectionManager) Broadcast(message []byte) {
 			conn.Close()
 			delete(cm.clients, conn)
 		}
+	}
+}
+
+// ReceiveMessages receives messages from all connected clients.
+func (cm *ConnectionManager) ReceiveMessages() {
+	for conn := range cm.clients {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("Failed to read message:", err)
+			conn.Close()
+			delete(cm.clients, conn)
+		}
+
+		log.Println("Received message:", string(message))
 	}
 }
