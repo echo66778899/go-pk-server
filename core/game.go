@@ -448,6 +448,7 @@ func (g *Game) resetForNewGame() {
 	// Move the dealer position
 	g.updateDealerPostion()
 	g.gs.pot.ResetPot()
+	g.gs.cc.Reset()
 	g.gs.CurrentRound = PreFlop
 }
 

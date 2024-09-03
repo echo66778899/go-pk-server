@@ -201,7 +201,7 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (client *Clien
 	}
 
 	// Register new the client
-	client = newConnectedClient(string(nameId), uint64(gId), conn)
+	client = newConnectedClient(string(nameId), uint64(gId), cm, conn)
 	cm.rooms[gId][nameId] = client
 
 	if _, ok := cm.broadcast[gId]; !ok {
@@ -226,6 +226,14 @@ func (cm *ConnectionManager) RemoveClient(client *Client) {
 	delete(cm.rooms[groupId(client.GroupId)], userId(client.Username))
 
 	mylog.Debugf("Number of clients in room %d: %d\n", client.GroupId, len(cm.rooms[groupId(client.GroupId)]))
+}
+
+func (cm *ConnectionManager) NotifiesChanges(gId uint64, message *msg.CommunicationMessage) {
+	// Log the message
+	mylog.Debugf("Sending message to player: %v\n", message)
+
+	// Send the message
+	cm.broadcast[groupId(gId)] <- *message
 }
 
 func (cm *ConnectionManager) BroadcastMessage(b []byte, gId groupId) {

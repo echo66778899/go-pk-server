@@ -11,6 +11,8 @@ const (
 	PlayerActMsgType
 	// SyncGameState represents the game state sync message type.
 	SyncGameStateMsgType
+	// SyncPriaveState represents the player state sync message type.
+	SyncPrivateStateMsgType
 	// ErrorMsgType represents the error message type.
 	ErrorMsgType
 )
@@ -48,4 +50,28 @@ type PlayerMessage struct {
 
 type ErrorMessage struct {
 	Message string `json:"message"`
+}
+
+type PlayerState struct {
+	Name   string `json:"name"`
+	Slot   int    `json:"slot"`
+	Chips  int    `json:"chips"`
+	Bet    int    `json:"bet"`
+	Status string `json:"status"`
+}
+
+type PrivateMessage struct {
+	Hand []Card `json:"your_hand"`
+}
+
+type Card struct {
+	Suit  int `json:"suit"`
+	Value int `json:"value"`
+}
+
+type SyncGameStateMessage struct {
+	CommunityCards []Card        `json:"community_cards"`
+	Players        []PlayerState `json:"players"`
+	Pot            int           `json:"pot"`
+	CurrentPlayer  string        `json:"current_player"`
 }

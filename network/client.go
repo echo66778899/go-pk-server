@@ -9,11 +9,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type Agent interface {
-	SendMessage(msg []byte)
-	NotifiesChanges()
-}
-
 type Client struct {
 	Username string
 	GroupId  uint64
@@ -21,11 +16,11 @@ type Client struct {
 	ws       *websocket.Conn
 }
 
-func newConnectedClient(username string, gId uint64, ws *websocket.Conn) *Client {
+func newConnectedClient(username string, gId uint64, agent core.Agent, ws *websocket.Conn) *Client {
 	return &Client{
 		Username: username,
 		GroupId:  gId,
-		player:   core.NewOnlinePlayer(username, 0),
+		player:   core.NewOnlinePlayer(username, agent, gId),
 		ws:       ws,
 	}
 }
@@ -53,7 +48,7 @@ func (c *Client) handleMessage(message msg.CommunicationMessage) {
 			defautl = core.Fold
 		case "raise":
 			defautl = core.Raise
-			value = msgPayload["value"].(int)
+			value = int(msgPayload["value"].(float64))
 		case "allin":
 			defautl = core.AllIn
 		default:

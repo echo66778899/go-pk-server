@@ -6,28 +6,13 @@ import (
 	"os"
 
 	"go-pk-server/client/ui"
-	engine "go-pk-server/core"
 	sync_msg "go-pk-server/msg"
 
 	"github.com/gorilla/websocket"
 )
 
-type CMessage struct {
-	Username string `json:"username"`
-	Message  string `json:"message"`
-}
-
 func main() {
-	cards := []engine.Card{
-		{Value: engine.Ace, Suit: engine.Clubs},
-		{Value: engine.Jack, Suit: engine.Hearts},
-		{Value: engine.Three, Suit: engine.Clubs},
-		{Value: engine.Ten, Suit: engine.Diamonds},
-		{Value: engine.Five, Suit: engine.Spades},
-	}
-	ui.PrintBoard(cards)
 
-	return
 	// Connect to the WebSocket server
 	ws, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/ws", nil)
 	if err != nil {
@@ -94,6 +79,16 @@ func main() {
 			}
 
 			fmt.Printf("\nReceived: %s\n", msg)
+
+			if msg.Type == sync_msg.ErrorMsgType {
+				log.Fatalf("Error message received: %s", msg.Payload)
+			}
+
+			if msg.Type == sync_msg.SyncGameStateMsgType {
+				// Render the game state
+				fmt.Printf("Game State: %v\n", msg.Payload)
+				ui.PrintBoardFromGameSyncState(&msg)
+			}
 		}
 	}()
 
@@ -158,6 +153,8 @@ func main() {
 					log.Println("Failed to read input:", err)
 					os.Exit(1)
 				}
+				msg.Type = sync_msg.PlayerActMsgType
+				msg.Payload = sync_msg.PlayerMessage{ActionName: action, Value: value}
 			default:
 				fmt.Println("Invalid action. Please try again.")
 			}

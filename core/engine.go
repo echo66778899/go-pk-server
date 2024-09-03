@@ -202,6 +202,10 @@ func (g *GameEngine) RunGameEngine(action Action) {
 
 func (g *GameEngine) NotifyGameState() {
 	// Todo: If game state has changed, notify the clients
+	p := g.playerMgr.GetOnlyOnePlayingPlayer()
+	if p != nil {
+		p.NotifyGameState(&g.State, g.playerMgr)
+	}
 }
 
 // HandleRoomCreated handles the TableCreated state.

@@ -16,6 +16,10 @@ func (h *Hand) SetCard(card Card, idx int) {
 	h.playerCards[idx] = card
 }
 
+func (h *Hand) Cards() []Card {
+	return h.playerCards[:]
+}
+
 func (h *Hand) Reset() {
 	h.playerCards = [2]Card{}
 	h.itsRank = HandRanking(-1)

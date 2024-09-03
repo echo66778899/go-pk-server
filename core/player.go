@@ -2,8 +2,14 @@ package engine
 
 import (
 	"fmt"
+	"go-pk-server/msg"
 	"math/rand"
 )
+
+// Agent interface
+type Agent interface {
+	NotifiesChanges(gId uint64, message *msg.CommunicationMessage)
+}
 
 type Player interface {
 	// For game engine
@@ -21,17 +27,17 @@ type Player interface {
 	CurrentBet() int
 	ShowHand() *Hand
 	Status() PlayerStatus
-	ID() int
+	ID() uint64
 	Name() string
 	Chips() int
 
 	// Notifies the player of the game state
-	NotifyGameState(gs GameState)
+	NotifyGameState(gs *GameState, tm *TableManager)
 }
 
 type OnlinePlayer struct {
 	name string
-	id   int
+	id   uint64
 	//networkClient *wsnetwork.NetworkClient
 
 	// Player state
@@ -43,13 +49,17 @@ type OnlinePlayer struct {
 
 	// Suggested actions
 	suggestAction []PlayerActType
+
+	// Connection agent
+	connAgent Agent
 }
 
 // NewOnlinePlayer creates a new online player.
-func NewOnlinePlayer(name string, id int) *OnlinePlayer {
+func NewOnlinePlayer(name string, connAgent Agent, id uint64) *OnlinePlayer {
 	return &OnlinePlayer{
-		name: name,
-		id:   id,
+		name:      name,
+		id:        id,
+		connAgent: connAgent,
 		//networkClient: networkClient,
 	}
 }
@@ -125,7 +135,7 @@ func (p *OnlinePlayer) Status() PlayerStatus {
 	return p.status
 }
 
-func (p *OnlinePlayer) ID() int {
+func (p *OnlinePlayer) ID() uint64 {
 	return p.id
 }
 
@@ -137,8 +147,46 @@ func (p *OnlinePlayer) Chips() int {
 	return p.chips
 }
 
-func (p *OnlinePlayer) NotifyGameState(gs GameState) {
-	//p.networkClient.NotifyGameState(gs)
+func (p *OnlinePlayer) NotifyGameState(gs *GameState, tm *TableManager) {
+	var players []msg.PlayerState
+	for _, player := range tm.players {
+		players = append(players, msg.PlayerState{
+			Name:   player.Name(),
+			Slot:   player.Position(),
+			Chips:  player.Chips(),
+			Bet:    player.CurrentBet(),
+			Status: player.Status().String(),
+		})
+	}
+
+	var communityCards []msg.Card
+	for _, card := range gs.cc.Cards {
+		communityCards = append(communityCards, msg.Card{
+			Suit:  int(card.Suit),
+			Value: int(card.Value),
+		})
+	}
+
+	var playerHand []msg.Card
+	for _, card := range p.hand.Cards() {
+		playerHand = append(playerHand, msg.Card{
+			Suit:  int(card.Suit),
+			Value: int(card.Value),
+		})
+	}
+
+	var message = msg.CommunicationMessage{
+		Type: msg.SyncGameStateMsgType,
+		Payload: msg.SyncGameStateMessage{
+			CommunityCards: communityCards,
+			YourHand:       playerHand,
+			Players:        players,
+		},
+	}
+
+	fmt.Printf("Player %s is notified of the game state: %v\n", p.name, message)
+
+	p.connAgent.NotifiesChanges(p.id, &message)
 }
 
 func (p *OnlinePlayer) RandomSuggestionAction() PlayerAction {
@@ -185,7 +233,3 @@ func (p *OnlinePlayer) NewReAct(ActionType PlayerActType, Amount int) ActionIf {
 		Amount:         Amount,
 	}
 }
-
-// func (p *OnlinePlayer) NotifyAction(action ActionIf) {
-// 	p.networkClient.NotifyAction(action)
-// }

@@ -111,6 +111,10 @@ func (c CommunityCards) String() string {
 	return cardsString
 }
 
+func (c *CommunityCards) GetCards() []Card {
+	return c.Cards
+}
+
 func (c *CommunityCards) AddCard(card Card) {
 	c.Cards = append(c.Cards, card)
 }
