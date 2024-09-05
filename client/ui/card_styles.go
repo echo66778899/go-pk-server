@@ -10,7 +10,7 @@ import (
 var cardStyle = map[msgpb.SuitType]Style{
 	msgpb.SuitType_HEARTS:   {ColorRed, ColorBlack, ModifierBold},
 	msgpb.SuitType_DIAMONDS: {ColorYellow, ColorBlack, ModifierBold},
-	msgpb.SuitType_CLUBS:    {ColorGreen, ColorBlack, ModifierBold},
+	msgpb.SuitType_CLUBS:    {ColorBlue, ColorBlack, ModifierBold},
 	msgpb.SuitType_SPADES:   {ColorWhite, ColorBlack, ModifierBold},
 }
 

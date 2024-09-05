@@ -206,6 +206,13 @@ func (g *GameEngine) NotifyGameState() {
 	if p != nil {
 		p.NotifyGameState(&g.State, g.playerMgr)
 	}
+
+	// Notify directly to all players if they have new cards
+	for _, player := range g.playerMgr.players {
+		if player.Status() == Playing && player.HasNewCards() {
+			player.NotifyPlayerIfNewHand()
+		}
+	}
 }
 
 // HandleRoomCreated handles the TableCreated state.

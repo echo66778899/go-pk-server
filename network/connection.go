@@ -1,14 +1,16 @@
 package network
 
 import (
+	msgpb "go-pk-server/gen"
 	mylog "go-pk-server/log"
-	"go-pk-server/msg"
+	"log"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 )
 
 type userId string
@@ -18,7 +20,7 @@ type ConnectionManager struct {
 	upgrader websocket.Upgrader
 
 	rooms     map[groupId]map[userId]*Client
-	broadcast map[groupId]chan msg.CommunicationMessage // Broadcast channel
+	broadcast map[groupId]chan *msgpb.ServerMessage // Broadcast channel
 	mutex     sync.Mutex
 }
 
@@ -31,7 +33,7 @@ func NewConnectionManager() *ConnectionManager {
 				return true // Allow all origins for simplicity (be cautious in production)
 			}},
 		rooms:     make(map[groupId]map[userId]*Client),
-		broadcast: make(map[groupId]chan msg.CommunicationMessage),
+		broadcast: make(map[groupId]chan *msgpb.ServerMessage),
 	}
 }
 
@@ -79,14 +81,26 @@ func (cm *ConnectionManager) serveWebSocket(w http.ResponseWriter, r *http.Reque
 	for {
 		// Log waiting for message
 		mylog.Debugf("Waiting for message from player [%s]", c.Username)
-		var message msg.CommunicationMessage
-		err := c.ws.ReadJSON(&message)
+
+		msgType, blob, err := c.ws.ReadMessage()
 		if err != nil {
 			mylog.Errorf("Error reading message: %v", err)
 			cm.RemoveClient(c)
 			break
 		}
-		mylog.Debugf("Received from player %s, message=%v\n", c.Username, message)
+		if msgType != websocket.BinaryMessage {
+			mylog.Error("Invalid message type")
+			continue
+		}
+
+		// Unmarshal the message
+		message := &msgpb.ClientMessage{}
+		if err := proto.Unmarshal(blob, message); err != nil {
+			mylog.Errorf("Failed to unmarshal proto: %v", err)
+			continue
+		}
+
+		mylog.Debugf("Received from player %s\n", c.Username)
 		// Dispatch message to the appropriate handler
 
 		if c != nil {
@@ -129,36 +143,44 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (client *Clien
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()
 	client = nil
-	// Authenticate the client
-	var message msg.CommunicationMessage
 
 	// And timeout if no message is received in 10 seconds
 	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-	err := conn.ReadJSON(&message)
+
+	msgType, blob, err := conn.ReadMessage()
 	if err != nil {
 		mylog.Error("Failed to read auth message:", err)
 		return
 	}
 
-	if message.Type != msg.AuthMsgType || message.Payload == nil {
+	if msgType != websocket.BinaryMessage {
 		conn.WriteMessage(websocket.TextMessage, []byte("Invalid message"))
-		mylog.Error("Invalid authen message")
+		mylog.Error("Invalid authen message type")
+		return
+	}
+
+	// Authenticate the client
+	var message msgpb.ClientMessage
+
+	if err := proto.Unmarshal(blob, &message); err != nil {
+		log.Fatalf("Failed to unmarshal proto: %v", err)
 		return
 	}
 
 	// Print the message
-	mylog.Debugf("Received authen message: %v\n", message)
+	mylog.Debug("Received authen message", message.GetMessage())
 
-	checkIn, ok := message.Payload.(map[string]interface{})
+	jr, ok := message.GetMessage().(*msgpb.ClientMessage_JoinRoom)
+
 	if !ok {
-		conn.WriteMessage(websocket.TextMessage, []byte("Invalid message"))
-		mylog.Error("Invalid authen message")
+		conn.WriteMessage(websocket.TextMessage, []byte("Invalid message ClientMessage_JoinRoom"))
+		mylog.Error("Invalid message ClientMessage_JoinRoom")
 		return
 	}
 
-	roomStr := checkIn["room"].(string)
-
+	roomStr := jr.JoinRoom.Room
 	mylog.Debug("Room:", roomStr)
+
 	// convert room string to uint64
 	roomNo, err := strconv.ParseUint(roomStr, 10, 64)
 	if err != nil {
@@ -167,9 +189,9 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (client *Clien
 	}
 
 	gId := groupId(roomNo)
-	nameId := userId(checkIn["username"].(string))
-	passcode := checkIn["passcode"].(string)
-	session := checkIn["session"].(string)
+	nameId := userId(jr.JoinRoom.NameId)
+	passcode := jr.JoinRoom.Passcode
+	session := jr.JoinRoom.SessionId
 
 	// Check if the room is valid
 	// Find the room
@@ -205,7 +227,7 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (client *Clien
 	cm.rooms[gId][nameId] = client
 
 	if _, ok := cm.broadcast[gId]; !ok {
-		cm.broadcast[gId] = make(chan msg.CommunicationMessage)
+		cm.broadcast[gId] = make(chan *msgpb.ServerMessage)
 		mylog.Debug("Starting broadcast for group:", gId)
 		go cm.handleBroadcastMessage(gId)
 	}
@@ -228,18 +250,26 @@ func (cm *ConnectionManager) RemoveClient(client *Client) {
 	mylog.Debugf("Number of clients in room %d: %d\n", client.GroupId, len(cm.rooms[groupId(client.GroupId)]))
 }
 
-func (cm *ConnectionManager) NotifiesChanges(gId uint64, message *msg.CommunicationMessage) {
+func (cm *ConnectionManager) NotifiesChanges(gId uint64, message *msgpb.ServerMessage) {
 	// Log the message
-	mylog.Debugf("Sending message to player: %v\n", message)
-
+	mylog.Debugf("Broadcast message to all player in room %d\n", gId)
 	// Send the message
-	cm.broadcast[groupId(gId)] <- *message
+	cm.broadcast[groupId(gId)] <- message
 }
 
-func (cm *ConnectionManager) BroadcastMessage(b []byte, gId groupId) {
-	var message msg.CommunicationMessage
-	message.Type = msg.SyncGameStateMsgType
-	message.Payload = string(b)
-
-	cm.broadcast[gId] <- message
+func (cm *ConnectionManager) DirectNotify(gId uint64, nameId string, message *msgpb.ServerMessage) {
+	// Log the message
+	mylog.Debugf("Direct message to player %d in room %d\n", nameId, gId)
+	// Send the message
+	if c, ok := cm.rooms[groupId(gId)][userId(nameId)]; ok {
+		// Serialize (marshal) the protobuf message
+		sendData, err := proto.Marshal(message)
+		if err != nil {
+			mylog.Fatalf("Failed to marshal proto: %v", err)
+		}
+		// Send the response
+		if err := c.ws.WriteMessage(websocket.BinaryMessage, sendData); err != nil {
+			mylog.Fatalf("Failed to write message: %v", err)
+		}
+	}
 }

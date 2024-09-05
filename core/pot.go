@@ -34,6 +34,10 @@ func (p *Pot) Total() int {
 	return p.amount
 }
 
+func (p *Pot) Size() int {
+	return p.amount
+}
+
 func (p *Pot) PlayerAmount(position int) int {
 	return p.playerAmount[position]
 }

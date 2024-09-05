@@ -8,13 +8,6 @@ import (
 	tb "github.com/nsf/termbox-go"
 )
 
-type MainPlayer struct {
-	CurrentPlayerPossition int
-	sync.Mutex
-}
-
-var CurrentPlayer = MainPlayer{CurrentPlayerPossition: 0}
-
 type Drawable interface {
 	GetRect() image.Rectangle
 	SetRect(int, int, int, int)

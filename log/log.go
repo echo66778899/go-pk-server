@@ -30,6 +30,10 @@ func Error(args ...interface{}) {
 	log.Error(args...)
 }
 
+func Fatal(args ...interface{}) {
+	log.Fatal(args...)
+}
+
 func Debugf(format string, args ...interface{}) {
 	log.Debugf(format, args...)
 }
@@ -44,6 +48,10 @@ func Warnf(format string, args ...interface{}) {
 
 func Errorf(format string, args ...interface{}) {
 	log.Errorf(format, args...)
+}
+
+func Fatalf(format string, args ...interface{}) {
+	log.Fatalf(format, args...)
 }
 
 const (

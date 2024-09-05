@@ -10,14 +10,22 @@ const ColorClear Color = -1
 
 // Basic terminal colors
 const (
-	ColorBlack   Color = 0
-	ColorRed     Color = 1
-	ColorGreen   Color = 2
-	ColorYellow  Color = 3
-	ColorBlue    Color = 4
-	ColorMagenta Color = 5
-	ColorCyan    Color = 6
-	ColorWhite   Color = 7
+	ColorBlack        Color = 0
+	ColorRed          Color = 1
+	ColorGreen        Color = 2
+	ColorYellow       Color = 3
+	ColorBlue         Color = 4
+	ColorMagenta      Color = 5
+	ColorCyan         Color = 6
+	ColorWhite        Color = 7
+	ColorDarkGray     Color = 8
+	ColorLightRed     Color = 9
+	ColorLightGreen   Color = 10
+	ColorLightYellow  Color = 11
+	ColorLightBlue    Color = 12
+	ColorLightMagenta Color = 13
+	ColorLightCyan    Color = 14
+	ColorLightGray    Color = 15
 )
 
 type Modifier uint

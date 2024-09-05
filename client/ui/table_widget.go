@@ -19,8 +19,8 @@ func NewTable() *Table {
 			Fg: ColorWhite,
 			Bg: ColorBlack,
 		},
-		radiusX: 55,
-		radiusY: 17,
+		radiusX: TABLE_RADIUS_X,
+		radiusY: TABLE_RADIUS_Y,
 	}
 }
 

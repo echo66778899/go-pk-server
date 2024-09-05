@@ -2,19 +2,22 @@ package engine
 
 import (
 	"fmt"
-	"go-pk-server/msg"
 	"math/rand"
+
+	msgpb "go-pk-server/gen"
 )
 
 // Agent interface
 type Agent interface {
-	NotifiesChanges(gId uint64, message *msg.CommunicationMessage)
+	NotifiesChanges(gId uint64, message *msgpb.ServerMessage)
+	DirectNotify(playerId uint64, nameId string, message *msgpb.ServerMessage)
 }
 
 type Player interface {
 	// For game engine
 	UpdatePosition(int)
 	DealCard(Card, int)
+	HasNewCards() bool
 	UpdateCurrentBet(int)
 	UpdateStatus(PlayerStatus)
 	TakeChips(int)
@@ -33,11 +36,12 @@ type Player interface {
 
 	// Notifies the player of the game state
 	NotifyGameState(gs *GameState, tm *TableManager)
+	NotifyPlayerIfNewHand()
 }
 
 type OnlinePlayer struct {
 	name string
-	id   uint64
+	gid  uint64
 	//networkClient *wsnetwork.NetworkClient
 
 	// Player state
@@ -47,6 +51,9 @@ type OnlinePlayer struct {
 	status     PlayerStatus
 	currentBet int
 
+	// internal state
+	isNewCard bool
+
 	// Suggested actions
 	suggestAction []PlayerActType
 
@@ -55,10 +62,10 @@ type OnlinePlayer struct {
 }
 
 // NewOnlinePlayer creates a new online player.
-func NewOnlinePlayer(name string, connAgent Agent, id uint64) *OnlinePlayer {
+func NewOnlinePlayer(name string, connAgent Agent, gid uint64) *OnlinePlayer {
 	return &OnlinePlayer{
 		name:      name,
-		id:        id,
+		gid:       gid,
 		connAgent: connAgent,
 		//networkClient: networkClient,
 	}
@@ -72,6 +79,17 @@ func (p *OnlinePlayer) UpdatePosition(position int) {
 // Implement the Player interface
 func (p *OnlinePlayer) DealCard(card Card, idx int) {
 	p.hand.SetCard(card, idx)
+	if idx == 1 {
+		p.isNewCard = true
+	}
+}
+
+// HasNewCards returns true if the player has new cards. Otherwise, it returns false.
+// It also resets the isNewCard flag to false.
+func (p *OnlinePlayer) HasNewCards() bool {
+	ret := p.isNewCard
+	p.isNewCard = false
+	return ret
 }
 
 func (p *OnlinePlayer) UpdateCurrentBet(bet int) {
@@ -117,6 +135,8 @@ func (p *OnlinePlayer) ResetForNewGame() {
 		p.status = SatOut
 	}
 	p.currentBet = 0
+	p.hand.Reset()
+	p.isNewCard = false
 }
 
 func (p *OnlinePlayer) Position() int {
@@ -136,7 +156,7 @@ func (p *OnlinePlayer) Status() PlayerStatus {
 }
 
 func (p *OnlinePlayer) ID() uint64 {
-	return p.id
+	return p.gid
 }
 
 func (p *OnlinePlayer) Name() string {
@@ -148,44 +168,63 @@ func (p *OnlinePlayer) Chips() int {
 }
 
 func (p *OnlinePlayer) NotifyGameState(gs *GameState, tm *TableManager) {
-	var players []msg.PlayerState
-	for _, player := range tm.players {
-		players = append(players, msg.PlayerState{
-			Name:   player.Name(),
-			Slot:   player.Position(),
-			Chips:  player.Chips(),
-			Bet:    player.CurrentBet(),
-			Status: player.Status().String(),
-		})
-	}
-
-	var communityCards []msg.Card
-	for _, card := range gs.cc.Cards {
-		communityCards = append(communityCards, msg.Card{
-			Suit:  int(card.Suit),
-			Value: int(card.Value),
-		})
-	}
-
-	var playerHand []msg.Card
-	for _, card := range p.hand.Cards() {
-		playerHand = append(playerHand, msg.Card{
-			Suit:  int(card.Suit),
-			Value: int(card.Value),
-		})
-	}
-
-	var message = msg.CommunicationMessage{
-		Type: msg.SyncGameStateMsgType,
-		Payload: msg.SyncGameStateMessage{
-			CommunityCards: communityCards,
-			Players:        players,
+	gameStateMsg := msgpb.ServerMessage{
+		Message: &msgpb.ServerMessage_GameState{
+			GameState: &msgpb.GameState{
+				Players: make([]*msgpb.Player, 0),
+				CurrentRound: &msgpb.BettingRound{
+					CurrentBet:     int32(gs.CurrentBet),
+					RoundNumber:    int32(gs.CurrentRound),
+					CommunityCards: make([]*msgpb.Card, 0),
+				},
+				PotSize:  int32(gs.pot.Size()),
+				DealerId: int32(gs.ButtonPosition),
+			},
 		},
 	}
 
-	fmt.Printf("Player %s is notified of the game state: %v\n", p.name, message)
+	// Add community cards to the message
+	for _, card := range gs.cc.Cards {
+		gameStateMsg.GetGameState().CurrentRound.CommunityCards = append(gameStateMsg.GetGameState().CurrentRound.CommunityCards, &msgpb.Card{
+			Suit: msgpb.SuitType(card.Suit),
+			Rank: msgpb.RankType(card.Value),
+		})
+	}
 
-	p.connAgent.NotifiesChanges(p.id, &message)
+	// Add players to the message
+	for _, player := range tm.players {
+		gameStateMsg.GetGameState().Players = append(gameStateMsg.GetGameState().Players, &msgpb.Player{
+			Name:          player.Name(),
+			Chips:         int32(player.Chips()),
+			TablePosition: int32(player.Position()),
+			Status:        player.Status().String(),
+			CurrentBet:    int32(player.CurrentBet()),
+		})
+	}
+
+	p.connAgent.NotifiesChanges(p.gid, &gameStateMsg)
+}
+
+func (p *OnlinePlayer) NotifyPlayerIfNewHand() {
+	if p.HasNewCards() {
+		// Send the player's hand to the player
+		handMsg := msgpb.ServerMessage{
+			Message: &msgpb.ServerMessage_PeerState{
+				PeerState: &msgpb.PeerState{
+					TablePos:    int32(p.position),
+					PlayerCards: make([]*msgpb.Card, 0),
+				},
+			},
+		}
+		// Add the player's hand to the message
+		for _, card := range p.hand.Cards() {
+			handMsg.GetPeerState().PlayerCards = append(handMsg.GetPeerState().PlayerCards, &msgpb.Card{
+				Suit: msgpb.SuitType(card.Suit),
+				Rank: msgpb.RankType(card.Value),
+			})
+		}
+		p.connAgent.DirectNotify(p.gid, p.name, &handMsg)
+	}
 }
 
 func (p *OnlinePlayer) RandomSuggestionAction() PlayerAction {

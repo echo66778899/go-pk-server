@@ -15,13 +15,26 @@ const (
 // Community cards position
 const (
 	COMMUNITY_CARDS_X = 45
-	COMMUNITY_CARDS_Y = 17
+	COMMUNITY_CARDS_Y = 15
+)
+
+// Pot position
+const (
+	POT_X = 60
+	POT_Y = 24
 )
 
 // Pocket pair position
 const (
-	POCKET_PAIR_X = 57
-	POCKET_PAIR_Y = 33
+	POCKET_PAIR_X = 54
+	POCKET_PAIR_Y = 34
+)
+
+// Control panel position
+const (
+	CONTROL_PANEL_X_LEFT  = 10
+	CONTROL_PANEL_X_RIGHT = 120
+	CONTROL_PANEL_Y       = 47
 )
 
 // Define type

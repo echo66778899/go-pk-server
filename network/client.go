@@ -2,9 +2,8 @@ package network
 
 import (
 	core "go-pk-server/core"
+	msgpb "go-pk-server/gen"
 	mylog "go-pk-server/log"
-	"go-pk-server/msg"
-	"strconv"
 
 	"github.com/gorilla/websocket"
 )
@@ -25,53 +24,44 @@ func newConnectedClient(username string, gId uint64, agent core.Agent, ws *webso
 	}
 }
 
-func (c *Client) handleMessage(message msg.CommunicationMessage) {
-	if message.Payload == nil {
-		return
-	}
-	msgPayload, ok := message.Payload.(map[string]interface{})
-	if !ok {
+func (c *Client) handleMessage(message *msgpb.ClientMessage) {
+	if message == nil {
 		return
 	}
 
-	switch message.Type {
-	case msg.PlayerActMsgType:
-		defautl := core.Fold
-		value := 0
-		actionName := msgPayload["action_name"].(string)
-		switch actionName {
-		case "call":
-			defautl = core.Call
-		case "check":
-			defautl = core.Check
+	switch x := message.GetMessage().(type) {
+	case *msgpb.ClientMessage_PlayerAction:
+		// Handle the player action
+		mylog.Debugf("Player Action: %+v\n", x.PlayerAction)
+		switch x.PlayerAction.ActionType {
 		case "fold":
-			defautl = core.Fold
+			mylog.Infof("Client player %s folded", c.Username)
+			core.MyGame.PlayerAction(c.player.NewReAct(core.Fold, 0))
+		case "call":
+			mylog.Infof("Client player %s called", c.Username)
+			core.MyGame.PlayerAction(c.player.NewReAct(core.Call, 0))
+		case "check":
+			mylog.Infof("Client player %s checked", c.Username)
+			core.MyGame.PlayerAction(c.player.NewReAct(core.Check, 0))
 		case "raise":
-			defautl = core.Raise
-			value = int(msgPayload["value"].(float64))
+			mylog.Infof("Client player %s raised", c.Username)
+			core.MyGame.PlayerAction(c.player.NewReAct(core.Raise, int(x.PlayerAction.RaiseAmount)))
 		case "allin":
-			defautl = core.AllIn
+			mylog.Infof("Client player %s all-in", c.Username)
+			core.MyGame.PlayerAction(c.player.NewReAct(core.AllIn, 0))
 		default:
-			mylog.Errorf("Server not support player action type: %v", actionName)
-			return
+			mylog.Errorf("Server not support player action type: %v", x.PlayerAction.ActionType)
 		}
-		mylog.Infof("Client player %s sent player action: %v", c.Username, actionName)
-		core.MyGame.PlayerAction(c.player.NewReAct(defautl, value))
-
-	case msg.CtrlMsgType:
-		ctrlType := msgPayload["control_type"].(string)
-		switch ctrlType {
-		case "join_slot":
-			slot := msgPayload["data"].(string)
-			// convert to int
-			slotNo, err := strconv.Atoi(slot)
-			if err != nil {
-				mylog.Errorf("Failed to convert slot number to int: %v", err)
-				return
-			}
-			mylog.Infof("Client player %s joined the game", c.Username)
-			c.player.UpdatePosition(slotNo)
-			core.MyGame.PlayerJoin(c.player)
+	case *msgpb.ClientMessage_JoinGame:
+		// Handle the join game request
+		mylog.Debugf("Join Game: %+v\n", x.JoinGame)
+		c.player.UpdatePosition(int(x.JoinGame.ChooseSlot))
+		core.MyGame.PlayerJoin(c.player)
+		mylog.Infof("Client player %s joined the game", c.Username)
+	case *msgpb.ClientMessage_ControlMessage:
+		// Handle the custom control message
+		mylog.Debugf("Control Message: %+v\n", x.ControlMessage)
+		switch x.ControlMessage {
 		case "request_buyin":
 			mylog.Infof("Client player %s requested 1 buyin", c.Username)
 			c.player.AddChips(1 * 2000)
@@ -82,10 +72,11 @@ func (c *Client) handleMessage(message msg.CommunicationMessage) {
 			mylog.Infof("Client player %s next the game", c.Username)
 			core.MyGame.NextGame()
 		default:
-			mylog.Errorf("Server not support control message type: %v", ctrlType)
+			mylog.Errorf("Server not support control message type: %v", x.ControlMessage)
 		}
+
 	default:
-		mylog.Errorf("Server not support message type: %v", message)
+		mylog.Error("Unknown message type.")
 	}
 }
 

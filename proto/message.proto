@@ -44,7 +44,8 @@ message Card {
 }
 
 // Message to each player
-message Peer {
+message PeerState {
+    int32 table_pos = 1;
     repeated Card player_cards = 2; // Cards of each player in a game
 }
 
@@ -56,14 +57,15 @@ message Player {
     int32 chips = 4;       // Current chip count
     bool is_active = 5;    // If the player is currently active in the hand
     bool is_dealer = 6;    // If the player is the dealer
-    PlayerStatusType status = 7; // Player's status
+    string status = 7; // Player's status
+    int32 current_bet = 8;
 }
 
 // Message to represent a betting round (e.g., pre-flop, flop, turn, river)
 message BettingRound {
-    int32 round_number = 1;  // Number of the current round
-    repeated Card community_cards = 2; // Cards on the table in this round
-    string current_bet = 3;  // Current bet amount
+    repeated Card community_cards = 1; // Cards on the table in this round
+    int32 round_number = 2;  // Number of the current round
+    int32 current_bet = 3;  // Current bet amount
 }
 
 // Message to represent a player's action
@@ -77,16 +79,29 @@ message PlayerAction {
 message GameState {
     repeated Player players = 1;           // List of players
     BettingRound current_round = 2;        // Current betting round
-    string pot_size = 3;                   // Current size of the pot
-    string dealer_id = 4;                  // ID of the current dealer
+    int32 pot_size = 3;                   // Current size of the pot
+    int32 dealer_id = 4;                  // ID of the current dealer/button
+}
+
+message JoinRoom {
+    string name_id = 1;
+	string room = 2;
+	string passcode = 3;
+	string session_id = 4; // Emtpty string for first time connection
+}
+
+message JoinGame {
+    string name_id = 1;
+    int32  choose_slot = 2;
 }
 
 // Message sent by the client to the server
 message ClientMessage {
     oneof message {
         PlayerAction player_action = 1;    // Player's action message
-        string join_game = 2;              // Request to join a game
-        string leave_game = 3;             // Request to leave the game
+        JoinRoom join_room = 2;
+        JoinGame join_game = 3;              // Request to join a game
+        string control_message = 4;          // Custome requests to the game
     }
 }
 
@@ -94,8 +109,9 @@ message ClientMessage {
 message ServerMessage {
     oneof message {
         GameState game_state = 1;          // Updated game state
-        string game_over = 2;              // Game over message
-        string error_message = 3;          // Error message
-        string welcome_message = 4;        // Welcome message upon joining
+        PeerState peer_state = 2;
+        string game_over = 3;              // Game over message
+        string error_message = 4;          // Error message
+        string welcome_message = 5;        // Welcome message upon joining
     }
 }
