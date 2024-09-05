@@ -179,7 +179,6 @@ func (p *OnlinePlayer) NotifyGameState(gs *GameState, tm *TableManager) {
 		Type: msg.SyncGameStateMsgType,
 		Payload: msg.SyncGameStateMessage{
 			CommunityCards: communityCards,
-			YourHand:       playerHand,
 			Players:        players,
 		},
 	}

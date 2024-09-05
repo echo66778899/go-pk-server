@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package mypk;
+
+option go_package = "../gen;mypkpb";
+
+// Enum for card rank
+enum RankType {
+    UNSPECIFIED_RANK = 0; // Default value, should not be used
+    DEUCE = 1;            // 2 (Deuce)
+    THREE = 2;            // 3
+    FOUR = 3;             // 4
+    FIVE = 4;             // 5
+    SIX = 5;              // 6
+    SEVEN = 6;            // 7
+    EIGHT = 7;            // 8
+    NINE = 8;             // 9
+    TEN = 9;              // 10
+    JACK = 10;            // Jack
+    QUEEN = 11;           // Queen
+    KING = 12;            // King
+    ACE = 13;             // Ace
+}
+
+enum SuitType {
+    HEARTS = 0;
+    DIAMONDS = 1;
+    CLUBS = 2;
+    SPADES = 3;
+}
+
+enum PlayerStatusType {
+    FOLD = 0;
+    CHECK = 1;
+    CALL = 2;
+    RAISE = 3;
+    ALLIN = 4;
+}
+
+// Message to represent a card
+message Card {
+    RankType rank = 1;   // Rank of the card (e.g., "A", "2", "10", "J", "Q", "K")
+    SuitType suit = 2;   // Suit of the card (e.g., "hearts", "diamonds", "clubs", "spades")
+}
+
+// Message to each player
+message Peer {
+    repeated Card player_cards = 2; // Cards of each player in a game
+}
+
+// Message to represent a player
+message Player {
+    string id = 1;         // Unique identifier for the player
+    string name = 2;       // Player's display name
+    int32 table_position = 3; // Player's position on table
+    int32 chips = 4;       // Current chip count
+    bool is_active = 5;    // If the player is currently active in the hand
+    bool is_dealer = 6;    // If the player is the dealer
+    PlayerStatusType status = 7; // Player's status
+}
+
+// Message to represent a betting round (e.g., pre-flop, flop, turn, river)
+message BettingRound {
+    int32 round_number = 1;  // Number of the current round
+    repeated Card community_cards = 2; // Cards on the table in this round
+    string current_bet = 3;  // Current bet amount
+}
+
+// Message to represent a player's action
+message PlayerAction {
+    string player_id = 1;       // ID of the player taking action
+    string action_type = 2;     // Type of action (e.g., "fold", "check", "call", "raise", "all_in")
+    int32 raise_amount = 3;     // If the action is a raise, the amount raised
+}
+
+// Message to represent a game state
+message GameState {
+    repeated Player players = 1;           // List of players
+    BettingRound current_round = 2;        // Current betting round
+    string pot_size = 3;                   // Current size of the pot
+    string dealer_id = 4;                  // ID of the current dealer
+}
+
+// Message sent by the client to the server
+message ClientMessage {
+    oneof message {
+        PlayerAction player_action = 1;    // Player's action message
+        string join_game = 2;              // Request to join a game
+        string leave_game = 3;             // Request to leave the game
+    }
+}
+
+// Message sent by the server to the client
+message ServerMessage {
+    oneof message {
+        GameState game_state = 1;          // Updated game state
+        string game_over = 2;              // Game over message
+        string error_message = 3;          // Error message
+        string welcome_message = 4;        // Welcome message upon joining
+    }
+}

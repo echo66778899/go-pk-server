@@ -26,6 +26,11 @@ go mod tidy
 Configuration
 Before running the server, you may need to configure certain parameters such as server port, WebSocket settings, and other options. These can be adjusted in the config.json file or through environment variables.
 
+Generate code
+```
+protoc --go_out=. message.proto
+```
+
 ### Usage
 To start the Poker Game Server:
 
