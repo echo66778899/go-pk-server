@@ -1,11 +1,13 @@
 package network
 
 import (
+	"errors"
 	core "go-pk-server/core"
 	msgpb "go-pk-server/gen"
 	mylog "go-pk-server/log"
 
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 )
 
 type Client struct {
@@ -15,13 +17,34 @@ type Client struct {
 	ws       *websocket.Conn
 }
 
-func newConnectedClient(username string, gId uint64, agent core.Agent, ws *websocket.Conn) *Client {
+func newConnectedClient(username string, gId uint64, roomAgent core.Agent, ws *websocket.Conn) *Client {
 	return &Client{
 		Username: username,
 		GroupId:  gId,
-		player:   core.NewOnlinePlayer(username, agent, gId),
+		player:   core.NewOnlinePlayer(username, roomAgent, gId),
 		ws:       ws,
 	}
+}
+
+func (c *Client) send(message *msgpb.ServerMessage) error {
+	if message == nil {
+		return errors.New("message is nil")
+	}
+	if c.ws == nil {
+		return errors.New("websocket connection not found")
+	}
+	// Serialize (marshal) the protobuf message
+	sendData, err := proto.Marshal(message)
+	if err != nil {
+		mylog.Fatalf("Failed to marshal proto: %v", err)
+		return err
+	}
+	// Send the response
+	if err := c.ws.WriteMessage(websocket.BinaryMessage, sendData); err != nil {
+		mylog.Errorf("Failed to write message to client: %v", err)
+		return err
+	}
+	return nil
 }
 
 func (c *Client) handleMessage(message *msgpb.ClientMessage) {
@@ -71,6 +94,14 @@ func (c *Client) handleMessage(message *msgpb.ClientMessage) {
 		case "next_game":
 			mylog.Infof("Client player %s next the game", c.Username)
 			core.MyGame.NextGame()
+		case "sync_game_state":
+			mylog.Infof("Client player %s requested to sync game state", c.Username)
+			gsMsg := core.MyGame.SyncGameState()
+			c.send(&msgpb.ServerMessage{
+				Message: &msgpb.ServerMessage_GameState{
+					GameState: gsMsg,
+				},
+			})
 		default:
 			mylog.Errorf("Server not support control message type: %v", x.ControlMessage)
 		}
@@ -81,6 +112,6 @@ func (c *Client) handleMessage(message *msgpb.ClientMessage) {
 }
 
 func (c *Client) handleDisconnect() {
-	mylog.Infof("Client player %s left the game", c.Username)
-	//core.MyGame.PlayerLeave(c.player)
+	mylog.Infof("Player %s left the game", c.Username)
+	core.MyGame.PlayerLeave(c.player)
 }

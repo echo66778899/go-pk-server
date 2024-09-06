@@ -2,27 +2,18 @@ package ui
 
 import (
 	"fmt"
-	"sync"
 
 	msgpb "go-pk-server/gen"
 )
-
-type MainPlayer struct {
-	CurrentPlayerPossition int
-	MainCard               []msgpb.Card
-	sync.Mutex
-}
-
-var CurrentPlayer = MainPlayer{CurrentPlayerPossition: 0}
 
 // ========================
 // PlayersWidget
 type PlayersGroup struct {
 	Block
-	PlayersUI    []*PlayerPanel
-	TotalPlayers int
-	ShiftStep    int
-	RefLayout    Layout
+	PlayersUI  []*PlayerPanel
+	ShiftStep  int
+	RefLayout  Layout
+	MaxPlayers int
 }
 
 func NewPlayersGroup() *PlayersGroup {
@@ -31,7 +22,9 @@ func NewPlayersGroup() *PlayersGroup {
 	}
 }
 
-func (pg *PlayersGroup) UpdateState(players []*msgpb.Player, force bool) {
+func (pg *PlayersGroup) UpdateState(force bool) {
+	players := UI_MODEL_DATA.Players
+
 	if force {
 		for _, p := range pg.PlayersUI {
 			p.SetPlayers(nil)
@@ -40,42 +33,49 @@ func (pg *PlayersGroup) UpdateState(players []*msgpb.Player, force bool) {
 			if p == nil {
 				continue
 			}
-			if int(p.TablePosition) == CurrentPlayer.CurrentPlayerPossition {
-				pg.ShiftStep = int(pg.TotalPlayers - int(p.TablePosition))
+			if int(p.TablePosition) == UI_MODEL_DATA.YourTablePosition {
+				pg.ShiftStep = int(UI_MODEL_DATA.MaxPlayers - int(p.TablePosition))
 				break
 			}
 		}
 	}
 
 	for i, p := range players {
-		if i >= pg.TotalPlayers {
+		if p == nil {
+			continue
+		}
+		if i >= UI_MODEL_DATA.MaxPlayers {
 			break
 		}
 		// Calculate the index of the player in the UI
 		table_idx := int(p.TablePosition)
-		ui_idx := (table_idx + pg.ShiftStep) % pg.TotalPlayers // 1 + 5 % 6 = 0
+		ui_idx := (table_idx + pg.ShiftStep) % UI_MODEL_DATA.MaxPlayers // 1 + 5 % 6 = 0
 		pg.PlayersUI[ui_idx].SetPlayers(p)
+	}
+
+	for i, p := range pg.PlayersUI {
+		if p.player == nil {
+			// Set logic index for empty slot
+			p.SetSlot((i + UI_MODEL_DATA.YourTablePosition) % UI_MODEL_DATA.MaxPlayers)
+		}
 	}
 }
 
-func (pg *PlayersGroup) SetMaxOtherPlayers(maxOtherPlayers int) {
-	if maxOtherPlayers < 2 {
-		panic("Minimum number of players is 2")
-	}
-	if maxOtherPlayers != pg.TotalPlayers {
-		pg.TotalPlayers = maxOtherPlayers
-		pg.RefLayout = OTHER_PLAYERS[pg.TotalPlayers]
-		if pg.RefLayout == nil {
-			panic(fmt.Sprintf("No layout found for %d other players", pg.TotalPlayers))
-		}
-	} else {
+func (pg *PlayersGroup) UpdateGroupPlayers(maxOtherPlayers int) {
+	if maxOtherPlayers < 2 || pg.MaxPlayers == maxOtherPlayers {
 		return
+	}
+	pg.MaxPlayers = maxOtherPlayers
+
+	pg.RefLayout = OTHER_PLAYERS[UI_MODEL_DATA.MaxPlayers]
+	if pg.RefLayout == nil {
+		panic(fmt.Sprintf("No layout found for %d other players", UI_MODEL_DATA.MaxPlayers))
 	}
 
 	// Create player panels
-	pg.PlayersUI = make([]*PlayerPanel, pg.TotalPlayers)
+	pg.PlayersUI = make([]*PlayerPanel, UI_MODEL_DATA.MaxPlayers)
 
-	for i := 0; i < pg.TotalPlayers; i++ {
+	for i := 0; i < UI_MODEL_DATA.MaxPlayers; i++ {
 		pg.PlayersUI[i] = NewPlayerPanel()
 		pg.PlayersUI[i].SetCoodinate(pg.RefLayout[i].X, pg.RefLayout[i].Y)
 	}

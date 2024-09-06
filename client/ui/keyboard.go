@@ -15,6 +15,9 @@ const (
 	DOWN      KeyboardEventType = 6
 	SPACE     KeyboardEventType = 7
 	BACKSPACE KeyboardEventType = 8
+	MENU1     KeyboardEventType = 9
+	MENU2     KeyboardEventType = 10
+	MENU3     KeyboardEventType = 11
 )
 
 type KeyboardEvent struct {
@@ -60,8 +63,15 @@ func ListenToKeyboard(evChan chan KeyboardEvent) {
 			case termbox.KeyEsc:
 				evChan <- KeyboardEvent{EventType: END, Key: ev.Key}
 			default:
-				if ev.Ch == 'r' {
+				switch ev.Ch {
+				case 'r':
 					evChan <- KeyboardEvent{EventType: RETRY, Key: ev.Key}
+				case '1':
+					evChan <- KeyboardEvent{EventType: MENU1, Key: ev.Key}
+				case '2':
+					evChan <- KeyboardEvent{EventType: MENU2, Key: ev.Key}
+				case '3':
+					evChan <- KeyboardEvent{EventType: MENU3, Key: ev.Key}
 				}
 			}
 		case termbox.EventError:

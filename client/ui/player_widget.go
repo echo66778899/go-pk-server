@@ -11,6 +11,8 @@ type PlayerPanel struct {
 	Block
 	player *msgpb.Player
 	ppInfo *msgpb.PeerState
+
+	Slot int
 }
 
 func NewPlayerPanel() *PlayerPanel {
@@ -23,16 +25,28 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 	chipLine := 1
 	line1Offset := 2
 	statusLine := 3
-	isEmpty := (pp.player == nil)
 
-	if isEmpty {
+	if pp.player == nil {
+		emptyStyle := NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 		pp.Title = "Slot Empty"
-		pp.TitleStyle = NewStyle(ColorDarkGray)
+		pp.TitleStyle = emptyStyle
+		pp.BorderStyle = emptyStyle
 		pp.Block.Draw(buf)
+
+		slotNo := fmt.Sprintf("[ %d ]\n", pp.Slot)
+		// Draw cells at center indicating empty slot able to join
+		cells := ParseStyles(slotNo, emptyStyle)
+		for x, cell := range cells {
+			if x+pp.Inner.Min.X+4 >= pp.Inner.Max.X {
+				break
+			}
+			buf.SetCell(cell, image.Pt(x+pp.Inner.Min.X+4, pp.Inner.Min.Y+line1Offset))
+		}
+
 		return
 	}
 
-	if !isEmpty {
+	if pp.player != nil {
 		pp.Title = pp.player.Name
 	}
 
@@ -52,7 +66,7 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 	chips := fmt.Sprintf("%d", pp.player.Chips)
 	cells := ParseStyles(chips, pp.TitleStyle)
 	for x, cell := range cells {
-		if x+pp.Inner.Min.X >= pp.Inner.Max.X {
+		if x+pp.Inner.Min.X+4 >= pp.Inner.Max.X {
 			break
 		}
 		buf.SetCell(cell, image.Pt(x+pp.Inner.Min.X+4, pp.Inner.Min.Y+chipLine))
@@ -62,7 +76,7 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 	status := pp.player.Status
 	cells = ParseStyles(status, pp.TitleStyle)
 	for x, cell := range cells {
-		if x+pp.Inner.Min.X >= pp.Inner.Max.X {
+		if x+pp.Inner.Min.X+3 >= pp.Inner.Max.X {
 			break
 		}
 		buf.SetCell(cell, image.Pt(x+pp.Inner.Min.X+3, pp.Inner.Min.Y+statusLine))
@@ -96,6 +110,10 @@ func (pp *PlayerPanel) SetPlayers(player *msgpb.Player) {
 		pp.ppInfo = nil
 	}
 	pp.player = player
+}
+
+func (pp *PlayerPanel) SetSlot(slot int) {
+	pp.Slot = slot
 }
 
 func (pp *PlayerPanel) SetPocketPair(pb *msgpb.PeerState) {

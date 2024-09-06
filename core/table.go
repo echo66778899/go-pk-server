@@ -1,15 +1,17 @@
 package engine
 
-import "fmt"
+import (
+	"log"
+)
 
 type TableManager struct {
 	numberOfSlots int
 	players       map[int]Player
 }
 
-func NewTableManager(maxSlots int) *TableManager {
+func NewTableManager() *TableManager {
 	return &TableManager{
-		numberOfSlots: maxSlots,
+		numberOfSlots: 0,
 		players:       make(map[int]Player),
 	}
 }
@@ -33,7 +35,7 @@ func (tm *TableManager) UpdateMaxNoOfSlot(sn int) {
 		tm.players = newPlayers
 	} else {
 		// Log invalid number of slots
-		fmt.Printf("Invalid number of slots=%d\n", sn)
+		log.Printf("Invalid number of slots=%d\n", sn)
 		return
 
 	}
@@ -49,11 +51,11 @@ func (tm *TableManager) AddPlayer(reqSlot int, p Player) {
 	if tm.players[reqSlot] == nil {
 		tm.players[reqSlot] = p
 		// Log player has been added
-		fmt.Printf("Player %s has been added to slot %d. Total players: %d\n",
+		log.Printf("Player %s has been added to slot %d. Total players: %d\n",
 			p.Name(), reqSlot, tm.GetNumberOfPlayers())
 	} else {
 		// Log requets slot is not available
-		fmt.Printf("Slot %d is not available\n", reqSlot)
+		log.Printf("Slot %d is not available\n", reqSlot)
 	}
 }
 
@@ -61,7 +63,7 @@ func (tm *TableManager) RemovePlayer(reqSlot int) {
 	if tm.players[reqSlot] != nil {
 		tm.players[reqSlot] = nil
 		// Log player has been removed
-		fmt.Printf("Player has been removed from slot %d. Total players: %d\n",
+		log.Printf("Player has been removed from slot %d. Total players: %d\n",
 			reqSlot, tm.GetNumberOfPlayers())
 	}
 }
@@ -69,8 +71,8 @@ func (tm *TableManager) RemovePlayer(reqSlot int) {
 func (tm *TableManager) GetNumberOfPlayingPlayers() int {
 	count := 0
 	for _, p := range tm.players {
-		fmt.Printf("Player %s status: %v, chips: %d\n", p.Name(), p.Status(), p.Chips())
 		if p != nil && p.Status() == Playing {
+			log.Printf("Player %s status: %v, chips: %d\n", p.Name(), p.Status(), p.Chips())
 			count++
 		}
 	}
@@ -97,7 +99,7 @@ func (tm *TableManager) GetPlayer(reqSlot int) Player {
 		return tm.players[reqSlot]
 	}
 	// Log player not found
-	fmt.Printf("Player not found at slot=%d\n", reqSlot)
+	log.Printf("Player not found at slot=%d\n", reqSlot)
 	return nil
 }
 
@@ -106,17 +108,17 @@ func (tm *TableManager) GetPlayer(reqSlot int) Player {
 // 2, 3, 4, 5, 0, 1
 func (tm *TableManager) NextPlayer(fromSlot int, status PlayerStatus) Player {
 	// Log next from slot
-	fmt.Println("----------------------------------------------")
-	fmt.Printf("Find next player from slot=%d with status=%v\n", fromSlot, status)
-	fmt.Println("----------------------------------------------")
-	defer fmt.Println("----------------------------------------------")
+	log.Println("----------------------------------------------")
+	log.Printf("Find next player from slot=%d with status=%v\n", fromSlot, status)
+	log.Println("----------------------------------------------")
+	defer log.Println("----------------------------------------------")
 
 	fromSlot += 1
 
 	for it := fromSlot; it < tm.numberOfSlots+fromSlot; it++ {
 		slot := it % tm.numberOfSlots
 		if tm.players[slot] != nil {
-			fmt.Printf("Found player %s is at slot=%d with status=%v\n",
+			log.Printf("Found player %s is at slot=%d with status=%v\n",
 				tm.players[slot].Name(), slot, tm.players[slot].Status())
 			if tm.players[slot].Status() == status {
 				return tm.players[slot]
@@ -124,7 +126,7 @@ func (tm *TableManager) NextPlayer(fromSlot int, status PlayerStatus) Player {
 		}
 	}
 	// Log could not find any player
-	fmt.Printf("Could not find any player at slot=%d with status=%v\n", fromSlot, status)
+	log.Printf("Could not find any player at slot=%d with status=%v\n", fromSlot, status)
 	return nil
 }
 
@@ -159,7 +161,7 @@ func (tm *TableManager) GetListOfPlayers(expect ...PlayerStatus) []Player {
 func (tm *TableManager) IsAllPlayersActed() bool {
 	// Check if all players have acted
 	for _, p := range tm.players {
-		if p != nil && p.Status() == WaitForAct || p.Status() == Playing {
+		if p != nil && p.Status() == Wait4Act || p.Status() == Playing {
 			return false
 		}
 	}

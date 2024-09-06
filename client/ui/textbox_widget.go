@@ -18,6 +18,7 @@ func NewParagraph() *TextBox {
 }
 
 func (tb *TextBox) Draw(buf *Buffer) {
+	tb.BorderStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 	tb.Block.Draw(buf)
 
 	cells := ParseStyles(tb.Text, tb.TextStyle)

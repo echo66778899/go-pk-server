@@ -55,7 +55,7 @@ func (g *Gauge) Draw(buf *Buffer) {
 type Cards struct {
 	Block
 	x0, y0 int
-	Cards  []msgpb.Card
+	Cards  []*msgpb.Card
 }
 
 func NewCards() *Cards {
@@ -73,14 +73,16 @@ func (c *Cards) SetCoodinate(x0, y0 int) {
 	c.y0 = y0
 }
 
-func (c *Cards) SetCards(cards []msgpb.Card) {
+func (c *Cards) SetCards(cards []*msgpb.Card) {
 	c.Cards = cards
-	y := c.x0 + len(c.Cards)*8
+	//y := c.x0 + len(c.Cards)*8
+	y := c.x0 + 5*8
 	c.SetRect(c.x0, c.y0, y+1, c.y0+7)
 }
 
 func (c *Cards) Draw(buf *Buffer) {
 	// Plot the box
+	c.BorderStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 	c.Block.Draw(buf)
 
 	// plot cards
@@ -90,7 +92,7 @@ func (c *Cards) Draw(buf *Buffer) {
 	//  │.....│
 	//  └─────┘
 	for i := range c.Cards {
-		card := &c.Cards[i]
+		card := c.Cards[i]
 		x := c.Inner.Min.X + (i * 8)
 		y := c.Inner.Min.Y
 		style := cardStyle[card.GetSuit()]

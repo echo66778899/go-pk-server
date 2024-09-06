@@ -5,12 +5,13 @@ import (
 	"math/rand"
 
 	msgpb "go-pk-server/gen"
+	mylog "go-pk-server/log"
 )
 
 // Agent interface
 type Agent interface {
-	NotifiesChanges(gId uint64, message *msgpb.ServerMessage)
-	DirectNotify(playerId uint64, nameId string, message *msgpb.ServerMessage)
+	NotifiesChanges(message *msgpb.ServerMessage)
+	DirectNotify(nameId string, message *msgpb.ServerMessage)
 }
 
 type Player interface {
@@ -35,7 +36,6 @@ type Player interface {
 	Chips() int
 
 	// Notifies the player of the game state
-	NotifyGameState(gs *GameState, tm *TableManager)
 	NotifyPlayerIfNewHand()
 }
 
@@ -112,6 +112,10 @@ func (p *OnlinePlayer) TakeChips(amount int) {
 func (p *OnlinePlayer) AddChips(amount int) {
 	p.chips += amount
 	fmt.Printf("Player %s's chips are added by %d. Total chips: %d\n", p.name, amount, p.chips)
+	// If player is sat out, set status to playing
+	if p.status == SatOut {
+		p.status = Playing
+	}
 }
 
 func (p *OnlinePlayer) UpdateSuggestions(suggestions []PlayerActType) {
@@ -167,69 +171,30 @@ func (p *OnlinePlayer) Chips() int {
 	return p.chips
 }
 
-func (p *OnlinePlayer) NotifyGameState(gs *GameState, tm *TableManager) {
-	gameStateMsg := msgpb.ServerMessage{
-		Message: &msgpb.ServerMessage_GameState{
-			GameState: &msgpb.GameState{
-				Players: make([]*msgpb.Player, 0),
-				CurrentRound: &msgpb.BettingRound{
-					CurrentBet:     int32(gs.CurrentBet),
-					RoundNumber:    int32(gs.CurrentRound),
-					CommunityCards: make([]*msgpb.Card, 0),
-				},
-				PotSize:  int32(gs.pot.Size()),
-				DealerId: int32(gs.ButtonPosition),
+func (p *OnlinePlayer) NotifyPlayerIfNewHand() {
+	mylog.Infof("Sync player %s's new cards\n", p.name)
+	// Send the player's hand to the player
+	handMsg := msgpb.ServerMessage{
+		Message: &msgpb.ServerMessage_PeerState{
+			PeerState: &msgpb.PeerState{
+				TablePos:    int32(p.position),
+				PlayerCards: make([]*msgpb.Card, 0),
 			},
 		},
 	}
-
-	// Add community cards to the message
-	for _, card := range gs.cc.Cards {
-		gameStateMsg.GetGameState().CurrentRound.CommunityCards = append(gameStateMsg.GetGameState().CurrentRound.CommunityCards, &msgpb.Card{
+	// Add the player's hand to the message
+	for _, card := range p.hand.Cards() {
+		handMsg.GetPeerState().PlayerCards = append(handMsg.GetPeerState().PlayerCards, &msgpb.Card{
 			Suit: msgpb.SuitType(card.Suit),
 			Rank: msgpb.RankType(card.Value),
 		})
 	}
-
-	// Add players to the message
-	for _, player := range tm.players {
-		gameStateMsg.GetGameState().Players = append(gameStateMsg.GetGameState().Players, &msgpb.Player{
-			Name:          player.Name(),
-			Chips:         int32(player.Chips()),
-			TablePosition: int32(player.Position()),
-			Status:        player.Status().String(),
-			CurrentBet:    int32(player.CurrentBet()),
-		})
-	}
-
-	p.connAgent.NotifiesChanges(p.gid, &gameStateMsg)
-}
-
-func (p *OnlinePlayer) NotifyPlayerIfNewHand() {
-	if p.HasNewCards() {
-		// Send the player's hand to the player
-		handMsg := msgpb.ServerMessage{
-			Message: &msgpb.ServerMessage_PeerState{
-				PeerState: &msgpb.PeerState{
-					TablePos:    int32(p.position),
-					PlayerCards: make([]*msgpb.Card, 0),
-				},
-			},
-		}
-		// Add the player's hand to the message
-		for _, card := range p.hand.Cards() {
-			handMsg.GetPeerState().PlayerCards = append(handMsg.GetPeerState().PlayerCards, &msgpb.Card{
-				Suit: msgpb.SuitType(card.Suit),
-				Rank: msgpb.RankType(card.Value),
-			})
-		}
-		p.connAgent.DirectNotify(p.gid, p.name, &handMsg)
-	}
+	p.connAgent.DirectNotify(p.name, &handMsg)
 }
 
 func (p *OnlinePlayer) RandomSuggestionAction() PlayerAction {
 	// check if nil list
-	if len(p.suggestAction) == 0 || p.chips == 0 || p.status == Folded || p.status != WaitForAct {
+	if len(p.suggestAction) == 0 || p.chips == 0 || p.status == Folded || p.status != Wait4Act {
 		return PlayerAction{
 			PlayerPosition: p.position,
 			ActionType:     Unknown,

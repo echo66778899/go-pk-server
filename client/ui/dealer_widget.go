@@ -38,10 +38,17 @@ func (d *DealerWidget) Draw(buf *Buffer) {
 	buf.SetCell(NewCell(' ', d.IconStyle), image.Pt(d.X+2, d.Y))
 }
 
-func (d *DealerWidget) IndexUI(idx, maxSlot int) {
-	if idx > maxSlot {
+func (d *DealerWidget) IndexUI(dealerIdx, maxSlot int) {
+	if dealerIdx > maxSlot {
 		panic("index out of range")
 	}
+
+	// Convert dealer index to player index where max players is 6
+	// your position is always 2, UI index is 0. So, we need to convert dealer index to UI index
+	// If button is at 2, then dealer index is 0
+	// If button is at 4, then dealer index is 2
+	// If button is at 0, then dealer index is 4
+	idx := (dealerIdx + UI_MODEL_DATA.MaxPlayers - UI_MODEL_DATA.YourTablePosition) % UI_MODEL_DATA.MaxPlayers
 
 	refLayout := OTHER_PLAYERS[maxSlot][idx]
 	if refLayout.X < TABLE_CENTER_X-10 {

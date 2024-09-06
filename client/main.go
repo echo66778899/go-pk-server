@@ -12,10 +12,13 @@ import (
 
 var (
 	i    int = 1000
-	TEST     = true
+	TEST     = false
 	// pointsChan         = make(chan int)
 	keyboardEventsChan = make(chan ui.KeyboardEvent)
 )
+
+// Connect to the WebSocket server
+var agent = network.NewAgent()
 
 var (
 	table      *ui.Table
@@ -30,52 +33,43 @@ func testGame() {
 	centerText.Text = fmt.Sprintf("i = %d", i)
 	dealerIcon.IndexUI(i%6, 6)
 
-	board.SetCards([]msgpb.Card{
-		{Suit: msgpb.SuitType_HEARTS, Rank: msgpb.RankType_ACE},
-		{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_KING},
-		{Suit: msgpb.SuitType_DIAMONDS, Rank: msgpb.RankType_QUEEN},
-		{Suit: msgpb.SuitType_CLUBS, Rank: msgpb.RankType_JACK},
-		{Suit: msgpb.SuitType_HEARTS, Rank: msgpb.RankType_FIVE},
-	})
-
-	gs := msgpb.GameState{
-		Players: []*msgpb.Player{
-			{
-				Name:          "player1",
-				Chips:         1500,
-				TablePosition: 0,
-			},
-			{
-				Name:          "player2",
-				Chips:         2000,
-				TablePosition: 1,
-			},
-			{
-				Name:          "player3",
-				Chips:         4000,
-				TablePosition: 2,
-			},
-			{
-				Name:          "Hai",
-				Chips:         3000,
-				TablePosition: 4,
-			},
-		},
-	}
-	playerWg.UpdateState(gs.Players, true)
+	// ui.UI_MODEL_DATA.Players = []*msgpb.Player{
+	// 	// {
+	// 	// 	Name:          "player1",
+	// 	// 	Chips:         1500,
+	// 	// 	TablePosition: 0,
+	// 	// },
+	// 	{
+	// 		Name:          "player2",
+	// 		Chips:         2000,
+	// 		TablePosition: 1,
+	// 	},
+	// 	{
+	// 		Name:          "player3",
+	// 		Chips:         4000,
+	// 		TablePosition: 2,
+	// 	},
+	// 	{
+	// 		Name:          "Hai",
+	// 		Chips:         3000,
+	// 		TablePosition: 4,
+	// 	},
+	// }
+	playerWg.UpdateState(true)
 	if i%2 == 0 {
 		playerWg.UpdatePocketPair(nil)
 	} else {
 		playerWg.UpdatePocketPair(&msgpb.PeerState{
 			PlayerCards: []*msgpb.Card{
-				&msgpb.Card{Suit: msgpb.SuitType_HEARTS, Rank: msgpb.RankType_DEUCE},
-				&msgpb.Card{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_SEVEN},
+				{Suit: msgpb.SuitType_HEARTS, Rank: msgpb.RankType_DEUCE},
+				{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_SEVEN},
 			},
 		})
 	}
+	btnCtrl.UpdateState()
 }
 
-func initWindows() {
+func initClient() {
 	// Table
 	table = ui.NewTable()
 	table.SetRect(ui.TABLE_CENTER_X-ui.TABLE_RADIUS_X, ui.TABLE_CENTER_Y-ui.TABLE_RADIUS_Y, 2*ui.TABLE_RADIUS_X, 2*ui.TABLE_RADIUS_Y)
@@ -95,7 +89,6 @@ func initWindows() {
 
 	// Players slider
 	playerWg = ui.NewPlayersGroup()
-	playerWg.SetMaxOtherPlayers(6)
 
 	// Buttons
 	btnCtrl = ui.NewButtonCtrlCenter()
@@ -150,27 +143,84 @@ func getRoomInfoInput() (playerName, room, passcode, sessId string) {
 	return
 }
 
-func buttonEnterEvtHandler(bt ui.ButtonType) {
+func factoryAction(action string, amount ...int) *msgpb.ClientMessage {
+	a := 0
+	if len(amount) > 0 {
+		a = amount[0]
+	}
+
+	return &msgpb.ClientMessage{
+		Message: &msgpb.ClientMessage_PlayerAction{
+			PlayerAction: &msgpb.PlayerAction{
+				ActionType:  action,
+				RaiseAmount: int32(a),
+			},
+		},
+	}
+}
+
+func factoryCtrlMessage(ctrl string) *msgpb.ClientMessage {
+	return &msgpb.ClientMessage{
+		Message: &msgpb.ClientMessage_ControlMessage{
+			ControlMessage: ctrl,
+		},
+	}
+}
+
+func buttonEnterEvtHandler(opt ...int) {
+	log.Printf("Button Enter Event Handler: %v", opt)
+
+	bt := ui.ButtonType(opt[0])
 	switch bt {
 	case ui.BNT_FoldButton:
+		agent.SendingMessage(factoryAction("fold"))
 	case ui.BNT_CheckButton:
+		agent.SendingMessage(factoryAction("check"))
 	case ui.BNT_CallButton:
+		agent.SendingMessage(factoryAction("call"))
 	case ui.BNT_RaiseButton:
+		if len(opt) > 1 {
+			agent.SendingMessage(factoryAction("raise", opt[1]))
+		}
 	case ui.BNT_AllInButton:
+		agent.SendingMessage(factoryAction("allin"))
 	case ui.BNT_JoinTableButton:
 	case ui.BNT_StartGameButton:
+		agent.SendingMessage(factoryCtrlMessage("start_game"))
 	case ui.BNT_LeaveGameButton:
 	case ui.BNT_RequestChipButton:
+		agent.SendingMessage(factoryCtrlMessage("request_buyin"))
+	case ui.BNT_SlotButton:
+		if len(opt) > 1 {
+			join := msgpb.ClientMessage{
+				Message: &msgpb.ClientMessage_JoinGame{
+					JoinGame: &msgpb.JoinGame{
+						ChooseSlot: int32(opt[1]),
+					},
+				},
+			}
+			agent.SendingMessage(&join)
+			ui.UI_MODEL_DATA.YourTablePosition = opt[1]
+		}
 	default:
 	}
 }
 
 func main() {
-	// Connect to the WebSocket server
-	agent := network.NewAgent()
+	logFile, err := os.OpenFile("client.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Failed to open log file: %v", err)
+	}
+	defer logFile.Close()
+
+	// Redirect log output to the file
+	log.SetOutput(logFile)
+
 	if agent.Connect() {
 		// Send a message to the server
 		n, r, p, s := getRoomInfoInput()
+		ui.UI_MODEL_DATA.YourUsernameID = n
+
 		msg := msgpb.ClientMessage{
 			Message: &msgpb.ClientMessage_JoinRoom{
 				JoinRoom: &msgpb.JoinRoom{
@@ -181,7 +231,7 @@ func main() {
 				},
 			},
 		}
-		agent.Send(&msg)
+		agent.SendingMessage(&msg)
 	}
 	defer agent.Close()
 
@@ -190,16 +240,20 @@ func main() {
 	defer ui.Deinit()
 
 	// Initialize the windows and widgets
-	initWindows()
+	initClient()
 
-	btnCtrl.SetOutsideHandler(buttonEnterEvtHandler)
+	// set the button handler
+	btnCtrl.SetUserButtonInteractionHandler(buttonEnterEvtHandler)
 
 	// new chan for keyboard
 	go ui.ListenToKeyboard(keyboardEventsChan)
 
+	// handler for server message
+	h := handler.Handler{UI_Model: &ui.UI_MODEL_DATA}
+
 	// Game looop
 	for {
-		// Process input
+		// Process input and server message
 		select {
 		case ev := <-keyboardEventsChan:
 			switch ev.EventType {
@@ -216,155 +270,50 @@ func main() {
 			case ui.ENTER:
 				btnCtrl.Enter()
 			case ui.SPACE:
+				agent.SendingMessage(factoryCtrlMessage("sync_game_state"))
+			case ui.BACKSPACE:
 				if btnCtrl.CtrlEnabled {
 					btnCtrl.EnableButtonCtrl(false)
 				} else {
 					btnCtrl.EnableButtonCtrl(true)
 				}
-			case ui.BACKSPACE:
-				// Toggle button control
-				btnCtrl.ToggleMenu()
+			case ui.MENU1:
+				btnCtrl.SetMenu(ui.ButtonMenuType_PLAYING_BTN)
+				btnCtrl.EnableButtonCtrl(true)
+			case ui.MENU2:
+				btnCtrl.SetMenu(ui.ButtonMenuType_CTRL_BTN)
+				btnCtrl.EnableButtonCtrl(true)
+			case ui.MENU3:
+				btnCtrl.SetMenu(ui.ButtonMenuType_SLOTS_BTN)
+				btnCtrl.EnableButtonCtrl(true)
 			case ui.END:
 				return
 			}
 		case m := <-agent.ReceivingMessage():
-			handler.HandleServerMessage(m)
+			h.HandleServerMessage(m)
 		}
 
-		// Update ux elements
-		ui.CurrentPlayer.CurrentPlayerPossition = 4
-		testGame()
+		// Check player state to enable/disable button control
+		for _, p := range ui.UI_MODEL_DATA.Players {
+			if p.TablePosition == int32(ui.UI_MODEL_DATA.YourTablePosition) {
+				if p.Status == "Wait4Act" {
+					btnCtrl.EnableButtonCtrl(true)
+				}
+				break
+			}
+		}
 
-		// Render ux elements
+		// Update UI state based on the model
+		playerWg.UpdateState(true)
+		playerWg.UpdateGroupPlayers(ui.UI_MODEL_DATA.MaxPlayers)
+		playerWg.UpdatePocketPair(ui.UI_MODEL_DATA.YourPrivateState)
+		board.SetCards(ui.UI_MODEL_DATA.CommunityCards)
+		btnCtrl.UpdateState()
+		dealerIcon.IndexUI(ui.UI_MODEL_DATA.DealerPosition, ui.UI_MODEL_DATA.MaxPlayers)
+
+		//testGame()
+
+		// Render UI elements
 		render()
 	}
-
-	// // Connect to the WebSocket server
-	// ws, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/ws", nil)
-	// if err != nil {
-	// 	log.Fatalf("Failed to connect to server: %v", err)
-	// }
-	// defer ws.Close()
-
-	// // Send a message to the server
-	// msg := sync_msg.AuthenMessage{}
-	// {
-
-	// commMsg := sync_msg.CommunicationMessage{
-	// 	Type:    sync_msg.AuthMsgType,
-	// 	Payload: msg,
-	// }
-
-	// err = ws.WriteJSON(commMsg)
-	// if err != nil {
-	// 	log.Fatalf("Failed to send message: %v", err)
-	// }
-
-	// fmt.Printf("Sent authen: %s\n", commMsg)
-
-	// // Read will not block if there is no message
-	// go func() {
-	// 	for {
-	// 		var msg sync_msg.CommunicationMessage
-	// 		err = ws.ReadJSON(&msg)
-	// 		if err != nil {
-	// 			log.Fatalf("Failed to read message: %v", err)
-	// 		}
-
-	// 		fmt.Printf("\nReceived: %s\n", msg)
-
-	// 		if msg.Type == sync_msg.ErrorMsgType {
-	// 			log.Fatalf("Error message received: %s", msg.Payload)
-	// 		}
-
-	// 		if msg.Type == sync_msg.SyncGameStateMsgType {
-	// 			// Render the game state
-	// 			fmt.Printf("Game State: %v\n", msg.Payload)
-	// 			ui.PrintBoardFromGameSyncState(&msg)
-	// 		}
-	// 	}
-	// }()
-
-	// var joinTable bool
-
-	// for {
-	// 	var msg sync_msg.CommunicationMessage
-	// 	fmt.Println("Menu Options:")
-	// 	if !joinTable {
-	// 		fmt.Println("0. Join a slot in table")
-	// 	}
-	// 	fmt.Println("1. Start Game")
-	// 	fmt.Println("2. Next Game")
-	// 	fmt.Println("3. Player Action")
-	// 	fmt.Println("4. Request Buy-in")
-	// 	fmt.Println("5. Exit")
-
-	// 	var choice int
-	// 	fmt.Print("Enter your choice: ")
-	// 	_, err := fmt.Scanln(&choice)
-	// 	if err != nil {
-	// 		log.Println("Failed to read input:", err)
-	// 		os.Exit(1)
-	// 	}
-
-	// 	switch choice {
-	// 	case 0:
-	// 		// Scan for slot number
-	// 		fmt.Print("Enter slot number: ")
-	// 		var slot string
-	// 		_, err := fmt.Scanln(&slot)
-	// 		if err != nil {
-	// 			log.Println("Failed to read input:", err)
-	// 			os.Exit(1)
-	// 		}
-	// 		msg.Type = sync_msg.CtrlMsgType
-	// 		msg.Payload = sync_msg.ControlMessage{ControlType: "join_slot", Data: slot}
-	// 		joinTable = true
-	// 	case 1:
-	// 		msg.Type = sync_msg.CtrlMsgType
-	// 		msg.Payload = sync_msg.ControlMessage{ControlType: "start_game", Data: ""}
-	// 	case 2:
-	// 		msg.Type = sync_msg.CtrlMsgType
-	// 		msg.Payload = sync_msg.ControlMessage{ControlType: "next_game", Data: ""}
-	// 	case 3:
-	// 		fmt.Print("Enter player action (call, check, fold, raise, allin): ")
-	// 		var action string
-	// 		_, err := fmt.Scanln(&action)
-	// 		if err != nil {
-	// 			log.Println("Failed to read input:", err)
-	// 			os.Exit(1)
-	// 		}
-	// 		switch action {
-	// 		case "call", "check", "fold", "allin":
-	// 			msg.Type = sync_msg.PlayerActMsgType
-	// 			msg.Payload = sync_msg.PlayerMessage{ActionName: action, Value: 0}
-	// 		case "raise":
-	// 			fmt.Print("Enter raise amount: ")
-	// 			var value int
-	// 			_, err := fmt.Scanln(&value)
-	// 			if err != nil {
-	// 				log.Println("Failed to read input:", err)
-	// 				os.Exit(1)
-	// 			}
-	// 			msg.Type = sync_msg.PlayerActMsgType
-	// 			msg.Payload = sync_msg.PlayerMessage{ActionName: action, Value: value}
-	// 		default:
-	// 			fmt.Println("Invalid action. Please try again.")
-	// 		}
-	// 	case 4:
-	// 		msg.Type = sync_msg.CtrlMsgType
-	// 		msg.Payload = sync_msg.ControlMessage{ControlType: "request_buyin", Data: ""}
-	// 	case 5:
-	// 		fmt.Println("Exiting...")
-	// 		return
-	// 	default:
-	// 		fmt.Println("Invalid choice. Please try again.")
-	// 	}
-
-	// 	err = ws.WriteJSON(msg)
-	// 	if err != nil {
-	// 		log.Fatalf("Failed to send message: %v", err)
-	// 	}
-	// 	fmt.Printf("Sent: %v\n", msg)
-	// }
 }

@@ -32,9 +32,9 @@ const (
 
 // Control panel position
 const (
-	CONTROL_PANEL_X_LEFT  = 10
+	CONTROL_PANEL_X_LEFT  = 12
 	CONTROL_PANEL_X_RIGHT = 120
-	CONTROL_PANEL_Y       = 47
+	CONTROL_PANEL_Y       = 46
 )
 
 // Define type

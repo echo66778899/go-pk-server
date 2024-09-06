@@ -19,9 +19,8 @@ type groupId uint64
 type ConnectionManager struct {
 	upgrader websocket.Upgrader
 
-	rooms     map[groupId]map[userId]*Client
-	broadcast map[groupId]chan *msgpb.ServerMessage // Broadcast channel
-	mutex     sync.Mutex
+	rooms map[groupId]*Room
+	mutex sync.Mutex
 }
 
 func NewConnectionManager() *ConnectionManager {
@@ -32,17 +31,17 @@ func NewConnectionManager() *ConnectionManager {
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow all origins for simplicity (be cautious in production)
 			}},
-		rooms:     make(map[groupId]map[userId]*Client),
-		broadcast: make(map[groupId]chan *msgpb.ServerMessage),
+		rooms: make(map[groupId]*Room),
 	}
 }
 
-func (cm *ConnectionManager) CreateRoom(gId groupId) {
+func (cm *ConnectionManager) AddRoom(gId groupId, r *Room) {
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()
-	if _, ok := cm.rooms[gId]; !ok {
-		cm.rooms[gId] = make(map[userId]*Client)
+	if r == nil {
+		log.Fatalf("Room is nil")
 	}
+	cm.rooms[gId] = r
 }
 
 func (cm *ConnectionManager) StartServer(addr string) error {
@@ -70,13 +69,12 @@ func (cm *ConnectionManager) serveWebSocket(w http.ResponseWriter, r *http.Reque
 	}()
 
 	// Handle Register new client to room
-	c := cm.ProcessCheckin(conn)
-	if c == nil {
-		mylog.Error("Failed to register client")
+	c, room := cm.ProcessCheckin(conn)
+	if room == nil {
+		mylog.Error("Failed to register client to a designated room")
 		return
 	}
-
-	defer c.handleDisconnect()
+	defer room.RemoveClient(conn)
 
 	for {
 		// Log waiting for message
@@ -85,7 +83,6 @@ func (cm *ConnectionManager) serveWebSocket(w http.ResponseWriter, r *http.Reque
 		msgType, blob, err := c.ws.ReadMessage()
 		if err != nil {
 			mylog.Errorf("Error reading message: %v", err)
-			cm.RemoveClient(c)
 			break
 		}
 		if msgType != websocket.BinaryMessage {
@@ -109,40 +106,14 @@ func (cm *ConnectionManager) serveWebSocket(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func (cm *ConnectionManager) handleBroadcastMessage(gId groupId) {
-	for {
-		message := <-cm.broadcast[gId]
-
-		// Broadcast message to all clients in the group
-		mylog.Debugf("Broadcasting message to group %d: %v\n", gId, message)
-
-		// for client in room
-		for _, c := range cm.rooms[gId] {
-			conn := c.ws
-			if conn == nil {
-				mylog.Errorf("Player %s not found\n", c.Username)
-				continue
-			}
-			err := conn.WriteJSON(message)
-			if err != nil {
-				conn.Close()
-				mylog.Error("Error broadcasting message:", err)
-				c.ws = nil
-				// Call client disconnect
-				c.handleDisconnect()
-			}
-		}
-	}
-}
-
 // ==================
 // Internal functions
 // ==================
 
-func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (client *Client) {
+func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (c *Client, r *Room) {
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()
-	client = nil
+	c, r = nil, nil
 
 	// And timeout if no message is received in 10 seconds
 	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
@@ -195,26 +166,27 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (client *Clien
 
 	// Check if the room is valid
 	// Find the room
-	if cm.rooms[gId] == nil {
+	room := cm.rooms[gId]
+	if room == nil {
 		conn.WriteMessage(websocket.TextMessage, []byte("Invalid room"))
 		mylog.Error("No existing room")
 		return
 	}
 
 	// Check if the passcode is correct
-	if passcode != roomMap[gId] {
+	if room.CheckPasscode(passcode) == false {
 		conn.WriteMessage(websocket.TextMessage, []byte("Invalid passcode"))
 		mylog.Error("Invalid passcode")
 		return
 	}
 
 	// Check if username exists
-	if cm.rooms[gId][nameId] != nil {
+	if room.CheckUsername(nameId) {
 		if session != "" { // Reconnect
 			// Log updated connection
 			mylog.Infof("Player %s reconnected", nameId)
-			client = cm.rooms[gId][nameId]
-			client.ws = conn
+			room.UpdateConnection(nameId, conn)
+			panic("Not expected updated connection")
 		} else {
 			conn.WriteMessage(websocket.TextMessage, []byte("Username exists"))
 			mylog.Error("Username exists")
@@ -223,53 +195,13 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (client *Clien
 	}
 
 	// Register new the client
-	client = newConnectedClient(string(nameId), uint64(gId), cm, conn)
-	cm.rooms[gId][nameId] = client
+	c = newConnectedClient(string(nameId), uint64(gId), room, conn)
+	room.AddClient(c)
+	r = room
 
-	if _, ok := cm.broadcast[gId]; !ok {
-		cm.broadcast[gId] = make(chan *msgpb.ServerMessage)
-		mylog.Debug("Starting broadcast for group:", gId)
-		go cm.handleBroadcastMessage(gId)
-	}
-
-	if client != nil {
-		mylog.Infof("Client connected from %v. client username: %s", conn.RemoteAddr().String(), nameId)
+	if r != nil && c != nil {
+		mylog.Infof("Client at %v connected to room %d under a name [%s]", conn.RemoteAddr().String(), r.RoomId, nameId)
 		conn.SetReadDeadline(time.Time{}) // Reset the read deadline
 	}
-	return client
-}
-
-func (cm *ConnectionManager) RemoveClient(client *Client) {
-	cm.mutex.Lock()
-	defer cm.mutex.Unlock()
-	// Log the disconnection
-	mylog.Infof("Client from player %s disconnected", client.Username)
-
-	delete(cm.rooms[groupId(client.GroupId)], userId(client.Username))
-
-	mylog.Debugf("Number of clients in room %d: %d\n", client.GroupId, len(cm.rooms[groupId(client.GroupId)]))
-}
-
-func (cm *ConnectionManager) NotifiesChanges(gId uint64, message *msgpb.ServerMessage) {
-	// Log the message
-	mylog.Debugf("Broadcast message to all player in room %d\n", gId)
-	// Send the message
-	cm.broadcast[groupId(gId)] <- message
-}
-
-func (cm *ConnectionManager) DirectNotify(gId uint64, nameId string, message *msgpb.ServerMessage) {
-	// Log the message
-	mylog.Debugf("Direct message to player %d in room %d\n", nameId, gId)
-	// Send the message
-	if c, ok := cm.rooms[groupId(gId)][userId(nameId)]; ok {
-		// Serialize (marshal) the protobuf message
-		sendData, err := proto.Marshal(message)
-		if err != nil {
-			mylog.Fatalf("Failed to marshal proto: %v", err)
-		}
-		// Send the response
-		if err := c.ws.WriteMessage(websocket.BinaryMessage, sendData); err != nil {
-			mylog.Fatalf("Failed to write message: %v", err)
-		}
-	}
+	return c, r
 }

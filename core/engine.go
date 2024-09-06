@@ -3,14 +3,16 @@ package engine
 import (
 	"context"
 	"fmt"
+	msgpb "go-pk-server/gen"
+	mylog "go-pk-server/log"
 )
 
 var DebugMode = true
 
-type ActionType int
+type GaneInputType int
 
 const (
-	Unspecified ActionType = iota
+	Unspecified GaneInputType = iota
 	PlayerJoined
 	PlayerLeft
 	PlayerReady
@@ -18,59 +20,80 @@ const (
 	GameEnded
 	PlayerActed
 	NextGame
-	UpdatePlayer
 )
 
-func (at ActionType) String() string {
+func (at GaneInputType) String() string {
 	return [...]string{"Unspecified", "PlayerJoined", "PlayerLeft",
-		"PlayerReady", "GameStarted", "GameEnded", "PlayerActed", "NextGame", "UpdatePlayer"}[at]
+		"PlayerReady", "GameStarted", "GameEnded", "PlayerActed", "NextGame"}[at]
 }
 
-type Action struct {
+type Input struct {
 	// Common fields for all actions
-	Type       ActionType `json:"type"`
-	PlayerInfo Player     `json:"player_info"`
-	// Possible fields for an action
+	Type       GaneInputType `json:"type"`
+	PlayerInfo Player        `json:"player_info"`
+	// Possible fields for an input
 	PlayerAct ActionIf
+}
+
+type NotifyGameStateReason int
+
+const (
+	NotifyGameStateReason_DONT_NOFITY   NotifyGameStateReason = 0
+	NofityGameStateReason_ALL           NotifyGameStateReason = 1
+	NotifyGameStateReason_NEW_ROUND     NotifyGameStateReason = 2
+	NotifyGameStateReason_NEW_GAME      NotifyGameStateReason = 3
+	NotifyGameStateReason_UPDATE_PLAYER NotifyGameStateReason = 4
+	NotifyGameStateReason_NEW_ACTION    NotifyGameStateReason = 5
+)
+
+type PublicRoom interface {
+	BroadcastMessageToYourRoom(msg *msgpb.ServerMessage)
 }
 
 // GameEngine represents the game engine.
 type GameEngineIf interface {
 	StartEngine(bool) // Start the game engine with event driven mode (true) or synchronous mode (false)
 	StopEngine()
+	SetRoomAgent(room PublicRoom)
 	PlayerJoin(player Player)
+	PlayerLeave(player Player)
 	StartGame()
 	NextGame()
 	Ready()
-	PlayerAction(action ActionIf)
+	PlayerAction(input ActionIf)
+	ChangeSetting(setting *msgpb.GameSetting)
+	GetGameSetting() *msgpb.GameSetting
+	SyncGameState() *msgpb.GameState
 }
 
 type EngineState int
 
 const (
-	TableCreated EngineState = iota
-	WaitForPlayers
-	WaitForPlayerActions
-	WaitForNextRound
+	EngineState_INITIALIZING     EngineState = 0
+	EngineState_WAIT_FOR_PLAYING EngineState = 1
+	EngineState_PLAYING          EngineState = 2
+	EngineState_PAUSED           EngineState = 3
 )
 
 // Overwrite string method for EngineState
 func (e EngineState) String() string {
-	return [...]string{"TableCreated", "WaitForPlayers", "WaitForPlayerActions", "WaitForNextRound"}[e]
+	return [...]string{"EngineState_INITIALIZING", "EngineState_WAIT_FOR_PLAYING", "EngineState_PLAYING", "EngineState_PAUSED"}[e]
 }
 
 type GameEngine struct {
 	gameSessionID int
-	State         GameState
 	playerMgr     *TableManager
 	game          *Game
+	room          PublicRoom
+
+	ntfReason NotifyGameStateReason
 
 	eState      EngineState
 	eventDriven bool
 
 	ctx           context.Context
 	cancel        context.CancelFunc
-	ActionChannel chan Action
+	GameInputChan chan Input
 }
 
 var MyGame = NewGameEngine()
@@ -80,11 +103,10 @@ func NewGameEngine() GameEngineIf {
 	// Add your initialization code here
 	return &GameEngine{
 		gameSessionID: 1,
-		eState:        TableCreated,
+		eState:        EngineState_INITIALIZING,
 		eventDriven:   false,
-		State:         GameState{},
-		playerMgr:     NewTableManager(8),
-		ActionChannel: make(chan Action, 10), // Change to buffered channel with capacity 10
+		playerMgr:     NewTableManager(),
+		GameInputChan: make(chan Input, 10), // Change to buffered channel with capacity 10
 
 	}
 }
@@ -97,7 +119,7 @@ func (g *GameEngine) StartEngine(e bool) {
 		g.ctx, g.cancel = context.WithCancel(context.Background())
 		go g.EngineLoop(g.ctx)
 	}
-	act := Action{Type: ActionType(WaitForPlayers)}
+	act := Input{Type: GaneInputType(EngineState_WAIT_FOR_PLAYING)}
 	g.processActions(act)
 }
 
@@ -107,53 +129,66 @@ func (g *GameEngine) StopEngine() {
 	}
 }
 
+func (g *GameEngine) SetRoomAgent(room PublicRoom) {
+	g.room = room
+}
+
 func (g *GameEngine) PlayerJoin(player Player) {
-	action := Action{Type: PlayerJoined, PlayerInfo: player}
-	g.processActions(action)
+	input := Input{Type: PlayerJoined, PlayerInfo: player}
+	g.processActions(input)
+}
+
+func (g *GameEngine) PlayerLeave(player Player) {
+	input := Input{Type: PlayerLeft, PlayerInfo: player}
+	g.processActions(input)
 }
 
 func (g *GameEngine) StartGame() {
 	// Log the game start
 	fmt.Println("Game started")
-	// send action to start the game
-	act := Action{Type: ActionType(GameStarted)}
+	// send input to start the game
+	act := Input{Type: GaneInputType(GameStarted)}
 	g.processActions(act)
 }
 
 func (g *GameEngine) NextGame() {
 	// Log the next game
 	fmt.Println("Next game")
-	// send action to start the next game
-	act := Action{Type: NextGame}
+	// send input to start the next game
+	act := Input{Type: NextGame}
 	g.processActions(act)
 }
 
-// PerformAction performs the specified action for the given player.
-func (g *GameEngine) PlayerAction(action ActionIf) {
-	// Send action to game engine
-	act := Action{Type: PlayerActed, PlayerAct: action}
+// PerformAction performs the specified input for the given player.
+func (g *GameEngine) PlayerAction(input ActionIf) {
+	// Send input to game engine
+	act := Input{Type: PlayerActed, PlayerAct: input}
 	g.processActions(act)
 }
 
 func (g *GameEngine) Ready() {
-	action := Action{Type: PlayerReady}
-	g.processActions(action)
+	input := Input{Type: PlayerReady}
+	g.processActions(input)
 }
 
-func (g *GameEngine) processActions(action Action) {
+func (g *GameEngine) processActions(input Input) {
 	if g.eventDriven {
-		g.ActionChannel <- action
+		g.GameInputChan <- input
 	} else {
-		g.RunGameEngine(action)
+		g.RunGameEngine(input)
 	}
+}
+
+func (g *GameEngine) gotoState(newState EngineState) {
+	g.eState = newState
 }
 
 // EngineLoop runs the game engine in a loop.
 func (g *GameEngine) EngineLoop(ctx context.Context) {
 	for {
 		select {
-		case action := <-g.ActionChannel:
-			g.RunGameEngine(action)
+		case input := <-g.GameInputChan:
+			g.RunGameEngine(input)
 		case <-ctx.Done():
 			// Game ended
 			return
@@ -161,100 +196,155 @@ func (g *GameEngine) EngineLoop(ctx context.Context) {
 	}
 }
 
-func (g *GameEngine) RunGameEngine(action Action) {
-	fmt.Printf("\n===============\n---------------\nCURRENT ENG STATE: %v - Event: %v\n---------------\n", g.eState, action)
+func (g *GameEngine) RunGameEngine(input Input) {
 	switch g.eState {
-	case TableCreated:
+	case EngineState_INITIALIZING:
 		// Room is created log
-		g.HandleRoomCreated()
-		g.eState = WaitForPlayers
-	case WaitForPlayers:
-		// Wait for players to join
-		if action.Type == PlayerJoined && action.PlayerInfo != nil {
-			g.HandleWaitForPlayers(action.PlayerInfo)
-		} else if action.Type == PlayerReady || action.Type == GameStarted {
-			g.game = NewGame(GameSetting{
-				NumPlayers:   g.playerMgr.numberOfSlots,
-				MaxStackSize: 1000,
-				MinStackSize: 100,
-				SmallBlind:   10,
-				BigBlind:     20,
-			}, g.playerMgr, NewDeck())
+		g.Initializing()
+		g.eState = EngineState_WAIT_FOR_PLAYING
+	case EngineState_WAIT_FOR_PLAYING:
+		// Wait for players to join, buy chip, and ready up
+		switch input.Type {
+		case PlayerJoined:
+			g.HandleJoiningPlayer(input.PlayerInfo)
+			g.NeedNtfAndReason(NotifyGameStateReason_UPDATE_PLAYER)
+		case PlayerLeft:
+			g.HandleLeavingPlayer(input.PlayerInfo)
+			g.NeedNtfAndReason(NotifyGameStateReason_UPDATE_PLAYER)
+		case PlayerReady, GameStarted:
 			// Play the game
-			g.game.Play()
-			g.eState = WaitForPlayerActions
+			if g.game.Play() {
+				g.eState = EngineState_PLAYING
+				g.NeedNtfAndReason(NotifyGameStateReason_NEW_GAME)
+			}
 		}
-	case WaitForPlayerActions:
-		switch action.Type {
+	case EngineState_PLAYING:
+		switch input.Type {
 		case PlayerActed:
-			g.game.HandleActions(action.PlayerAct)
+			g.game.HandleActions(input.PlayerAct)
+			g.NeedNtfAndReason(NotifyGameStateReason_NEW_ACTION)
 		case NextGame:
-			g.game.NextGame()
-		case UpdatePlayer:
-			g.eState = WaitForPlayers
 		}
-	case WaitForNextRound:
-		// Game over
+	case EngineState_PAUSED:
+		switch input.Type {
+		case NextGame:
+			g.eState = EngineState_PLAYING
+		}
 	}
 
+	// Try to notify the game state each time the game engine is run
 	g.NotifyGameState()
 }
 
-func (g *GameEngine) NotifyGameState() {
-	// Todo: If game state has changed, notify the clients
-	p := g.playerMgr.GetOnlyOnePlayingPlayer()
-	if p != nil {
-		p.NotifyGameState(&g.State, g.playerMgr)
-	}
+func (g *GameEngine) NeedNtfAndReason(reason NotifyGameStateReason) {
+	mylog.Infof("Need to notify the game state: %v\n", reason)
+	g.ntfReason = reason
+}
 
-	// Notify directly to all players if they have new cards
-	for _, player := range g.playerMgr.players {
-		if player.Status() == Playing && player.HasNewCards() {
-			player.NotifyPlayerIfNewHand()
+func (g *GameEngine) NotifyGameState() {
+	switch g.ntfReason {
+	case NotifyGameStateReason_DONT_NOFITY:
+		return
+	case NofityGameStateReason_ALL,
+		NotifyGameStateReason_NEW_ROUND,
+		NotifyGameStateReason_UPDATE_PLAYER,
+		NotifyGameStateReason_NEW_ACTION:
+		// Special case: Notifying
+	case NotifyGameStateReason_NEW_GAME:
+		// Notify directly to all players if they have new cards
+		for _, player := range g.playerMgr.players {
+			if player != nil && player.HasNewCards() {
+				player.NotifyPlayerIfNewHand()
+			}
 		}
 	}
+
+	if g.room != nil {
+		g.room.BroadcastMessageToYourRoom(&msgpb.ServerMessage{
+			Message: &msgpb.ServerMessage_GameState{
+				GameState: g.SyncGameState(),
+			},
+		})
+	} else {
+		mylog.Errorf("Room agent is not set\n")
+	}
+	g.ntfReason = NotifyGameStateReason_DONT_NOFITY
 }
 
-// HandleRoomCreated handles the TableCreated state.
-func (g *GameEngine) HandleRoomCreated() {
+// Initializing handles the EngineState_INITIALIZING state.
+func (g *GameEngine) Initializing() {
+	g.game = NewGame(
+		&msgpb.GameSetting{
+			MaxPlayers:  6,
+			MinPlayers:  2,
+			SmallBlind:  10,
+			BigBlind:    20,
+			TimePerTurn: 0, // 0 means no limit
+		},
+		g.playerMgr,
+		NewDeck(),
+		g.gotoState,
+	)
 }
 
-// HandleWaitForPlayers handles the WaitForPlayers state.
-func (g *GameEngine) HandleWaitForPlayers(player Player) {
-	fmt.Printf("Player %s joined the game\n", player.Name())
-	g.playerMgr.AddPlayer(player.Position(), player)
-	// Log the player count
+// HandleWaitForPlayers handles the EngineState_WAIT_FOR_PLAYING state.
+func (g *GameEngine) HandleJoiningPlayer(player Player) {
+	if player != nil {
+		fmt.Printf("Player %s joined the game\n", player.Name())
+		g.playerMgr.AddPlayer(player.Position(), player)
+	}
 }
 
-// HandleShowdown handles the Showdown state.
-func (g *GameEngine) HandleShowdown() {
-	// Add your logic for the Showdown state here
+func (g *GameEngine) HandleLeavingPlayer(player Player) {
+	if player != nil {
+		g.playerMgr.RemovePlayer(player.Position())
+	}
 }
 
-// HandleGameOver handles the GameOver state.
-func (g *GameEngine) EvaluateHands() {
-	// Compare hands and determine the winner
-	// Find the best hand among all players
-
-	// Print the winner
-	// fmt.Printf("The winner is %s with hand: [%s] (%s)\n", winningPlayer.Name, winningPlayer.Hand.BestHand(), winningPlayer.Hand.HandRankingString())
+// ChangeSetting changes the game setting.
+func (g *GameEngine) ChangeSetting(setting *msgpb.GameSetting) {
+	// Validate the setting
+	if setting.MaxPlayers < 2 || setting.MaxPlayers > 6 {
+		fmt.Println("Invalid setting: MaxPlayers")
+		return
+	}
 }
 
-// IsGameOver checks if the game is over.
-func (g *GameEngine) IsGameOver() bool {
-	// Add your game over condition logic here
-	return false
+// GetGameSetting returns the game setting.
+func (g *GameEngine) GetGameSetting() *msgpb.GameSetting {
+	if g.game != nil && g.game.setting != nil {
+		return g.game.setting
+	}
+	return nil
 }
 
-func (g *GameEngine) SummarizeRound() {
-	// Log the round summary
-	fmt.Println("Round summary:")
-	// 	for _, player := range g.State.Players {
-	// 		if player.Status() == Folded {
-	// 			fmt.Printf("Player %s: Fold\n", player.Name)
-	// 		} else {
-	// 			fmt.Printf("Player %s: %s (%s)\n", player.Name, player.ShowHand(), player.ShowHand())
-	// 		}
-	// 		fmt.Printf("Player %s has %d chips\n", player.Name, player.Chips)
-	// 	}
+// SyncGameState synchronizes the game state.
+func (g *GameEngine) SyncGameState() *msgpb.GameState {
+	syncMsg := &msgpb.GameState{
+		Players:        make([]*msgpb.Player, 0),
+		PotSize:        int32(g.game.gs.pot.Size()),
+		DealerId:       int32(g.game.gs.ButtonPosition),
+		CommunityCards: make([]*msgpb.Card, 0),
+		CurrentBet:     int32(g.game.gs.CurrentBet),
+		CurrentRound:   g.game.gs.CurrentRound,
+	}
+	// Add the community cards
+	for _, card := range g.game.gs.cc.GetCards() {
+		syncMsg.CommunityCards = append(syncMsg.CommunityCards, &msgpb.Card{Suit: msgpb.SuitType(card.Suit), Rank: msgpb.RankType(card.Value)})
+	}
+	// Add the players
+	for _, player := range g.playerMgr.players {
+		if player != nil {
+			syncMsg.Players = append(syncMsg.Players, &msgpb.Player{
+				Name:          player.Name(),
+				TablePosition: int32(player.Position()),
+				Chips:         int32(player.Chips()),
+				IsDealer:      player.Position() == g.game.gs.ButtonPosition,
+				Status:        player.Status().String(),
+				CurrentBet:    int32(player.CurrentBet()),
+			})
+		}
+	}
+
+	return syncMsg
 }

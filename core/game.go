@@ -1,82 +1,65 @@
 package engine
 
-import "fmt"
-
 // Define game rule machanism
 
-type GameSetting struct {
-	NumPlayers   int
-	MaxStackSize int
-	MinStackSize int
-	SmallBlind   int
-	BigBlind     int
-}
+import (
+	"fmt"
+	msgpb "go-pk-server/gen"
+	mylog "go-pk-server/log"
+)
 
 type GameStatistcs struct {
 	TotalHandsPlayed int
 }
 
 type Game struct {
-	GameSetting
 	GameStatistcs
-	gs   GameState
-	tm   *TableManager
-	deck *Deck
+	setting *msgpb.GameSetting
+	gs      GameState
+	tm      *TableManager
+	deck    *Deck
+
+	funcReqEngineState func(EngineState)
 }
 
 // NewPokerGame creates a new PokerGame
-func NewGame(setting GameSetting, tm *TableManager, d *Deck) *Game {
+func NewGame(setting *msgpb.GameSetting, tm *TableManager, d *Deck, reqEState func(EngineState)) *Game {
+	tm.UpdateMaxNoOfSlot(int(setting.MaxPlayers))
 	return &Game{
-		GameSetting: setting,
+		setting: setting,
 		gs: GameState{
 			pot: NewPot(),
 			cc:  CommunityCards{},
 		},
-		tm:   tm,
-		deck: d,
+		tm:                 tm,
+		deck:               d,
+		funcReqEngineState: reqEState,
 	}
 }
 
-func (g *Game) Play() {
+func (g *Game) Play() bool {
 	// Check if the number of players is valid
 	if g.tm.GetNumberOfPlayers() < 2 {
 		// Log error when the number of players is less than 2
 		fmt.Println("error: Number of players is less than 2")
-		return
+		return false
 	}
 
-	fmt.Printf("\n\n\n\nStarting a new game with %d players\n", g.tm.GetNumberOfPlayers())
-	// Start the game
-	g.tm.ResetForNewGame()
 	g.gs.NumPlayingPlayer = g.tm.GetNumberOfPlayingPlayers()
+	g.updateDealerPostion(g.TotalHandsPlayed == 0)
+
+	mylog.Infof("Starting a NEW_GAME with %d players", g.tm.GetNumberOfPlayers())
+	mylog.Infof("Number of playing players: %d\n", g.gs.NumPlayingPlayer)
+	mylog.Debugf("Who is the dealer? => %s\n", g.tm.GetPlayer(g.gs.ButtonPosition).Name())
 
 	// Shuffle the deck
 	g.deck.Shuffle()
 	g.deck.CutTheCard()
 
-	// Update the dealer position
-	g.updateDealerPostion()
-	g.gs.pot.ResetPot()
-
 	// Start the first round
 	g.handleEnterNewRoundLogic()
 
-	// Log game state
-	fmt.Printf("Who is the dealer? => %s\n", g.tm.GetPlayer(g.gs.ButtonPosition).Name())
-	fmt.Printf("Number of playing players: %d\n", g.gs.NumPlayingPlayer)
-
-}
-
-func (g *Game) NextGame() {
-	// Reset the game state for a new game
-	if g.gs.CurrentRound == PreFlop {
-		// Start the first round
-		g.handleEnterNewRoundLogic()
-		return
-	}
-
-	// Log error when the game is not in the PreFlop round
-	fmt.Println("error: Can not start a new game when the game is not in the PreFlop round")
+	return true
 }
 
 func (g *Game) HandleActions(action ActionIf) {
@@ -86,7 +69,11 @@ func (g *Game) HandleActions(action ActionIf) {
 
 	// Check if the action is valid
 	player := g.tm.GetPlayer(action.FromWho())
-	if player.Status() != WaitForAct {
+	if player == nil {
+		return
+	}
+
+	if player.Status() != Wait4Act {
 		// Log warning the player is not allowed to fold, the action is invalid
 		fmt.Println("error: Player", player.Name(), "is not allowed to ", action.WhatAction(), ", the action is invalid")
 		return
@@ -147,7 +134,7 @@ func (g *Game) HandleActions(action ActionIf) {
 			player.UpdateStatus(AlledIn)
 		}
 		g.gs.CurrentBet = player.CurrentBet()
-		// Update all player status to Playing and NextPlayer to WaitForAct
+		// Update all player status to Playing and NextPlayer to Wait4Act
 		for _, p := range g.tm.GetListOfOtherPlayers(action.FromWho(), Called, Raised, Checked) {
 			p.UpdateStatus(Playing)
 		}
@@ -161,7 +148,7 @@ func (g *Game) HandleActions(action ActionIf) {
 			g.gs.pot.AddToPot(player.Position(), allInAmount)
 			g.gs.CurrentBet = player.CurrentBet()
 
-			// Update all player status to Playing and NextPlayer to WaitForAct
+			// Update all player status to Playing and NextPlayer to Wait4Act
 			for _, p := range g.tm.GetListOfOtherPlayers(action.FromWho(), Called, Raised, Checked) {
 				p.UpdateStatus(Playing)
 			}
@@ -178,7 +165,7 @@ func (g *Game) HandleActions(action ActionIf) {
 	fmt.Printf("AFTER  Current bet: %d, Number of Playing: %d\n", g.gs.CurrentBet, g.gs.NumPlayingPlayer)
 
 	if np := g.tm.NextPlayer(action.FromWho(), Playing); np != nil {
-		np.UpdateStatus(WaitForAct)
+		np.UpdateStatus(Wait4Act)
 		switch action.WhatAction() {
 		case Check, Fold:
 			if g.gs.CurrentBet == 0 {
@@ -199,14 +186,33 @@ func (g *Game) HandleActions(action ActionIf) {
 		// Can not find the next player, the round is over
 		fmt.Println("Warning: Can not find the next player, the round is over")
 		if g.gs.NumPlayingPlayer <= 1 {
-			g.gs.CurrentRound = Showdown
+			g.gs.CurrentRound = msgpb.RoundStateType_SHOW_DOWN
 		}
 		g.handleEnterNewRoundLogic()
 		return
 	}
 }
 
-func (g *Game) resetForNewBettingRound() {
+func (g *Game) prepareForIncomingGame() {
+	// Reset the game state for a new game
+	g.tm.ResetForNewGame()
+
+	// Log statistics
+	g.TotalHandsPlayed++
+	fmt.Printf("Total hands played: %d\n", g.TotalHandsPlayed)
+
+	// Move the dealer position
+	g.updateDealerPostion(false)
+	g.gs.pot.ResetPot()
+
+	g.gs.cc.Reset()
+	g.gs.CurrentRound = msgpb.RoundStateType_PREFLOP
+
+	// Update engine state to wait for start plauing game
+	g.funcReqEngineState(EngineState_WAIT_FOR_PLAYING)
+}
+
+func (g *Game) prepareForNewBettingRound() {
 	// Reset player state
 	g.tm.ResetForNewRound()
 	// Reset new round state
@@ -220,8 +226,8 @@ func (g *Game) resetGameStateForNewRound() {
 	g.gs.CurrentBet = 0
 }
 
-func (g *Game) updateDealerPostion() {
-	if g.TotalHandsPlayed == 0 {
+func (g *Game) updateDealerPostion(firstGame bool) {
+	if firstGame {
 		// Select the first dealer, choose the player next to the last player
 		p := g.tm.NextPlayer(g.tm.GetMaxNoSlot()-1, Playing)
 		if p == nil {
@@ -249,26 +255,26 @@ func (g *Game) takeBlinds() {
 		return
 	}
 
-	sbPlayer.TakeChips(g.SmallBlind)
-	sbPlayer.UpdateCurrentBet(g.SmallBlind)
+	sbPlayer.TakeChips(int(g.setting.SmallBlind))
+	sbPlayer.UpdateCurrentBet(int(g.setting.SmallBlind))
 
-	bbPlayer.TakeChips(g.BigBlind)
-	bbPlayer.UpdateCurrentBet(g.BigBlind)
+	bbPlayer.TakeChips(int(g.setting.BigBlind))
+	bbPlayer.UpdateCurrentBet(int(g.setting.BigBlind))
 
 	// Update the current bet
-	g.gs.CurrentBet = g.BigBlind
+	g.gs.CurrentBet = int(g.setting.BigBlind)
 
 	// Add the blinds to the pot
 	g.gs.pot.AddToPot(sbPlayer.Position(), sbPlayer.CurrentBet())
 	g.gs.pot.AddToPot(bbPlayer.Position(), bbPlayer.CurrentBet())
 
 	// log take blinds from players successfyully
-	fmt.Printf("Small blind %s takes %d chips\n", sbPlayer.Name(), g.SmallBlind)
-	fmt.Printf("Big blind %s takes %d chips\n", bbPlayer.Name(), g.BigBlind)
+	fmt.Printf("Small blind %s takes %d chips\n", sbPlayer.Name(), int(g.setting.SmallBlind))
+	fmt.Printf("Big blind %s takes %d chips\n", bbPlayer.Name(), int(g.setting.BigBlind))
 
 	// Update the next active player
 	np := g.tm.NextPlayer(bbPlayer.Position(), Playing)
-	np.UpdateStatus(WaitForAct)
+	np.UpdateStatus(Wait4Act)
 	np.UpdateSuggestions([]PlayerActType{Fold, Call, Raise, AllIn})
 }
 
@@ -293,7 +299,7 @@ func (g *Game) dealCardsToPlayers() {
 
 func (g *Game) dealCommunityCards() {
 	switch g.gs.CurrentRound {
-	case Flop:
+	case msgpb.RoundStateType_FLOP:
 		// Burn a card
 		_ = g.deck.Draw()
 		// Add 3 cards to the community cards
@@ -303,7 +309,7 @@ func (g *Game) dealCommunityCards() {
 
 		// Print the community cards at flop
 		fmt.Printf("============ BOARD at FLOP ===========\n%s\n======================================\n", g.gs.cc.String())
-	case Turn:
+	case msgpb.RoundStateType_TURN:
 		// Burn a card
 		_ = g.deck.Draw()
 		// Add a card to the community cards
@@ -311,7 +317,7 @@ func (g *Game) dealCommunityCards() {
 
 		// Print the community cards at turn
 		fmt.Printf("============ BOARD at TURN ===========\n%s\n======================================\n", g.gs.cc.String())
-	case River:
+	case msgpb.RoundStateType_RIVER:
 		// Burn a card
 		_ = g.deck.Draw()
 		// Add a card to the community cards
@@ -377,7 +383,7 @@ func (g *Game) firstPlayerActionInRound() bool {
 	np := g.tm.NextPlayer(g.gs.ButtonPosition, Playing)
 
 	if np != nil {
-		np.UpdateStatus(WaitForAct)
+		np.UpdateStatus(Wait4Act)
 		np.UpdateSuggestions([]PlayerActType{Check, Raise, AllIn})
 		return true
 	}
@@ -387,69 +393,50 @@ func (g *Game) firstPlayerActionInRound() bool {
 
 func (g *Game) handleEnterNewRoundLogic() {
 	switch g.gs.CurrentRound {
-	case PreFlop:
-		g.resetForNewBettingRound()
+	case msgpb.RoundStateType_INITIAL:
+		g.prepareForIncomingGame()
+	case msgpb.RoundStateType_PREFLOP:
+		g.prepareForNewBettingRound()
 		g.takeBlinds()
 		g.dealCardsToPlayers()
 		// Next player to act is the player next to the big blind
-		g.gs.CurrentRound = Flop
-	case Flop:
-		g.resetForNewBettingRound()
+		g.gs.CurrentRound = msgpb.RoundStateType_FLOP
+	case msgpb.RoundStateType_FLOP:
+		g.prepareForNewBettingRound()
 		g.dealCommunityCards()
 		// First player to act is the player next to the dealer
 		if !g.firstPlayerActionInRound() {
 			g.dealTheRestOfCommunityCards()
 			g.evaluateHands()
-			g.resetForNewGame()
 		} else {
-			g.gs.CurrentRound = Turn
+			g.gs.CurrentRound = msgpb.RoundStateType_TURN
 		}
-	case Turn:
-		g.resetForNewBettingRound()
+	case msgpb.RoundStateType_TURN:
+		g.prepareForNewBettingRound()
 		g.dealCommunityCards()
 		// First player to act is the player next to the dealer
 		if !g.firstPlayerActionInRound() {
 			g.dealTheRestOfCommunityCards()
 			g.evaluateHands()
-			g.resetForNewGame()
 		} else {
-			g.gs.CurrentRound = River
+			g.gs.CurrentRound = msgpb.RoundStateType_RIVER
 		}
-	case River:
-		g.resetForNewBettingRound()
+	case msgpb.RoundStateType_RIVER:
+		g.prepareForNewBettingRound()
 		g.dealCommunityCards()
 
 		if !g.firstPlayerActionInRound() {
 			g.dealTheRestOfCommunityCards()
 			g.evaluateHands()
-			g.resetForNewGame()
+			g.prepareForIncomingGame()
+		} else {
+			g.evaluateHands()
 		}
-		g.gs.CurrentRound = Showdown
-	case Showdown:
+		g.gs.CurrentRound = msgpb.RoundStateType_SHOW_DOWN
+	case msgpb.RoundStateType_SHOW_DOWN:
 		// Evaluate hands to find the winner for main pot and side pot
-		g.evaluateHands()
-		g.resetForNewGame()
+		g.prepareForIncomingGame()
 	}
-}
-
-func (g *Game) resetForNewGame() {
-	// Reset the game state for a new game
-	g.tm.ResetForNewGame()
-	g.gs.NumPlayingPlayer = g.tm.GetNumberOfPlayingPlayers()
-
-	// Shuffle the deck
-	g.deck.Shuffle()
-	g.deck.CutTheCard()
-
-	// Log statistics
-	g.TotalHandsPlayed++
-	fmt.Printf("Total hands played: %d\n", g.TotalHandsPlayed)
-
-	// Move the dealer position
-	g.updateDealerPostion()
-	g.gs.pot.ResetPot()
-	g.gs.cc.Reset()
-	g.gs.CurrentRound = PreFlop
 }
 
 func (g *Game) evaluateHands() {

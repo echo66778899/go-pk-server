@@ -15,6 +15,8 @@ const (
 	BNT_StartGameButton   ButtonType = 6
 	BNT_LeaveGameButton   ButtonType = 7
 	BNT_RequestChipButton ButtonType = 8
+
+	BNT_SlotButton ButtonType = 9
 )
 
 type Button struct {
