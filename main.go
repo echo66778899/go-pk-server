@@ -12,11 +12,16 @@ func main() {
 
 	mylog.Infof("Starting server on :%d", 8080)
 
-	room2222 := snetwork.NewRoom(2, "1")
+	room2222 := snetwork.NewRoom(2, "1", "Hai Phan")
 	room2222.Serve()
-	room2222.SetSettingGetter(func() *msgpb.GameSetting {
-		return core.MyGame.GetGameSetting()
-	})
+	room2222.SetSettingGetter(
+		func() *msgpb.GameSetting {
+			return core.MyGame.GetGameSetting()
+		},
+		func() *msgpb.GameState {
+			return core.MyGame.GetGameState()
+		},
+	)
 
 	core.MyGame.SetRoomAgent(room2222)
 

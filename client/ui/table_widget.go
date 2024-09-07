@@ -16,7 +16,7 @@ type Table struct {
 func NewTable() *Table {
 	return &Table{
 		Style: Style{
-			Fg: ColorWhite,
+			Fg: ColorDarkGray,
 			Bg: ColorBlack,
 		},
 		radiusX: TABLE_RADIUS_X,

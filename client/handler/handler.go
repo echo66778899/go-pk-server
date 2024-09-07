@@ -3,6 +3,7 @@ package handler
 import (
 	"go-pk-server/client/ui"
 	msgpb "go-pk-server/gen"
+	"strconv"
 
 	"log"
 )
@@ -23,6 +24,8 @@ func (h *Handler) HandleServerMessage(message *msgpb.ServerMessage) {
 		handleGameSetting(message.GetGameSetting())
 	case *msgpb.ServerMessage_PeerState:
 		handlePeerState(message.GetPeerState())
+	case *msgpb.ServerMessage_BalanceInfo:
+		handleBalanceInfo(message.GetBalanceInfo())
 	case *msgpb.ServerMessage_ErrorMessage:
 		handleErrorMessage(message.GetErrorMessage())
 	default:
@@ -36,16 +39,71 @@ func handleGameState(gs *msgpb.GameState) {
 	ui.UI_MODEL_DATA.DealerPosition = int(gs.DealerId)
 	ui.UI_MODEL_DATA.CurrentRound = gs.CurrentRound
 
+	ui.UI_MODEL_DATA.YourPlayerState = nil
 	// Check if username is in the list of players
 	for _, player := range gs.Players {
-		if player.Name == ui.UI_MODEL_DATA.YourUsernameID {
+		if player.Name == ui.UI_MODEL_DATA.YourLoginUsernameID {
 			ui.UI_MODEL_DATA.YourTablePosition = int(player.TablePosition)
+			ui.UI_MODEL_DATA.YourPlayerState = player
 			break
 		}
 	}
+	// Enable Slot buttons when the username is not in the list of players
+	if ui.UI_MODEL_DATA.YourPlayerState == nil || len(ui.UI_MODEL_DATA.Players) == 0 {
+		ui.UI_MODEL_DATA.ActiveButtonMenu = ui.ButtonMenuType_SLOTS_BTN
+		ui.UI_MODEL_DATA.IsButtonEnabled = true
+		// Reset the YourTablePosition
+		ui.UI_MODEL_DATA.YourTablePosition = 0
+	}
+
+	// Enable control buttons when the username is in the list of players
+	if ui.UI_MODEL_DATA.YourPlayerState != nil {
+		switch gs.CurrentRound {
+		case msgpb.RoundStateType_INITIAL:
+			ui.UI_MODEL_DATA.ActiveButtonMenu = ui.ButtonMenuType_CTRL_BTN
+			ui.UI_MODEL_DATA.IsButtonEnabled = true
+		default:
+			ui.UI_MODEL_DATA.ActiveButtonMenu = ui.ButtonMenuType_PLAYING_BTN
+			if ui.UI_MODEL_DATA.YourPlayerState.Status == msgpb.PlayerStatusType_Wait4Act {
+				ui.UI_MODEL_DATA.IsButtonEnabled = true
+			} else {
+				ui.UI_MODEL_DATA.IsButtonEnabled = false
+			}
+		}
+	}
+
 	if gs.CommunityCards != nil {
 		ui.UI_MODEL_DATA.CommunityCards = gs.CommunityCards
 	}
+
+	// When current round is initial, clear your private state
+	switch gs.CurrentRound {
+	case msgpb.RoundStateType_INITIAL:
+		ui.UI_MODEL_DATA.IsDealerVisible = true
+		ui.UI_MODEL_DATA.YourPrivateState = nil
+		ui.UI_MODEL_DATA.Pot = 0
+		ui.UI_MODEL_DATA.CommunityCards = nil
+		ui.UI_MODEL_DATA.Result = nil
+	case msgpb.RoundStateType_SHOWDOWN:
+		ui.UI_MODEL_DATA.IsDealerVisible = false
+		ui.UI_MODEL_DATA.Result = gs.FinalResult
+	default:
+		ui.UI_MODEL_DATA.IsDealerVisible = true
+		ui.UI_MODEL_DATA.Pot = int(gs.PotSize)
+	}
+
+	// Update UI state based on Your Player status
+	if ui.UI_MODEL_DATA.YourPlayerState != nil {
+		switch ui.UI_MODEL_DATA.YourPlayerState.Status {
+		case msgpb.PlayerStatusType_Fold:
+			ui.UI_MODEL_DATA.YourTurn = true
+			ui.UI_MODEL_DATA.YourPrivateState = nil
+		default:
+		}
+	}
+
+	// Show dealer icon when there are players
+	ui.UI_MODEL_DATA.IsDealerVisible = (len(ui.UI_MODEL_DATA.Players) > 0)
 }
 
 func handleGameSetting(gs *msgpb.GameSetting) {
@@ -57,6 +115,21 @@ func handlePeerState(ps *msgpb.PeerState) {
 	log.Printf("Peer State: %+v\n", ps)
 	if ps.TablePos == int32(ui.UI_MODEL_DATA.YourTablePosition) {
 		ui.UI_MODEL_DATA.YourPrivateState = ps
+	}
+}
+
+func handleBalanceInfo(bi *msgpb.BalanceInfo) {
+	log.Printf("Balance Info: %+v\n", bi)
+
+	ui.UI_MODEL_DATA.PlayersBalance = make([]string, len(bi.PlayerBalances))
+
+	for i, balance := range bi.PlayerBalances {
+		if balance != nil {
+			ui.UI_MODEL_DATA.PlayersBalance[i] = "  [ " +
+				ui.FixStringLength(balance.PlayerName, 10, ' ') +
+				" ] : " +
+				strconv.Itoa(int(balance.Balance))
+		}
 	}
 }
 

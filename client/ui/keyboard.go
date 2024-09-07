@@ -7,7 +7,7 @@ type KeyboardEventType int
 // Keyboard events
 const (
 	ENTER     KeyboardEventType = 0
-	RETRY     KeyboardEventType = 1
+	REQCHIP   KeyboardEventType = 1
 	END       KeyboardEventType = 2
 	LEFT      KeyboardEventType = 3
 	RIGHT     KeyboardEventType = 4
@@ -18,6 +18,8 @@ const (
 	MENU1     KeyboardEventType = 9
 	MENU2     KeyboardEventType = 10
 	MENU3     KeyboardEventType = 11
+	NEXT      KeyboardEventType = 12
+	PAYBACK   KeyboardEventType = 13
 )
 
 type KeyboardEvent struct {
@@ -65,7 +67,11 @@ func ListenToKeyboard(evChan chan KeyboardEvent) {
 			default:
 				switch ev.Ch {
 				case 'r':
-					evChan <- KeyboardEvent{EventType: RETRY, Key: ev.Key}
+					evChan <- KeyboardEvent{EventType: REQCHIP, Key: ev.Key}
+				case 'p':
+					evChan <- KeyboardEvent{EventType: PAYBACK, Key: ev.Key}
+				case 'n':
+					evChan <- KeyboardEvent{EventType: NEXT, Key: ev.Key}
 				case '1':
 					evChan <- KeyboardEvent{EventType: MENU1, Key: ev.Key}
 				case '2':

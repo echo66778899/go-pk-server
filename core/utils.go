@@ -2,7 +2,10 @@ package engine
 
 // Game utils for poker
 
-import "sort"
+import (
+	"sort"
+	"strings"
+)
 
 // Hand ranking constants.
 type HandRanking int
@@ -174,4 +177,17 @@ func compareTiebreakers(tiebreaker1, tiebreaker2 []int) int {
 		}
 	}
 	return 0
+}
+
+func getWinnersName(winners []Player) string {
+	// Create a slice to hold the names
+	names := make([]string, len(winners))
+
+	// Collect the names
+	for i, winner := range winners {
+		names[i] = winner.Name()
+	}
+
+	// Join the names with ", "
+	return strings.Join(names, ", ")
 }

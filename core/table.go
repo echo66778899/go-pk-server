@@ -1,6 +1,8 @@
 package engine
 
 import (
+	msgpb "go-pk-server/gen"
+	mylog "go-pk-server/log"
 	"log"
 )
 
@@ -59,19 +61,24 @@ func (tm *TableManager) AddPlayer(reqSlot int, p Player) {
 	}
 }
 
-func (tm *TableManager) RemovePlayer(reqSlot int) {
+func (tm *TableManager) RemovePlayer(reqSlot int) (remaining int) {
 	if tm.players[reqSlot] != nil {
+		// Reset player's state before removing
+		tm.players[reqSlot].ResetForNewGame()
+		tm.players[reqSlot].ResetPlayerState()
 		tm.players[reqSlot] = nil
 		// Log player has been removed
-		log.Printf("Player has been removed from slot %d. Total players: %d\n",
-			reqSlot, tm.GetNumberOfPlayers())
+		remaining = tm.GetNumberOfPlayers()
+		mylog.Debugf("Player has been removed from slot %d. Total players: %d\n",
+			reqSlot, remaining)
 	}
+	return
 }
 
 func (tm *TableManager) GetNumberOfPlayingPlayers() int {
 	count := 0
 	for _, p := range tm.players {
-		if p != nil && p.Status() == PlayerStatus_Playing {
+		if p != nil && p.Status() == msgpb.PlayerStatusType_Playing {
 			log.Printf("Player %s status: %v, chips: %d\n", p.Name(), p.Status(), p.Chips())
 			count++
 		}
@@ -89,6 +96,7 @@ func (tm *TableManager) GetNumberOfPlayers() int {
 	return count
 }
 
+// Can return nil, if player not found. Please check nil before using
 func (tm *TableManager) GetPlayer(reqSlot int) Player {
 	// Check if requested slot is valid < number of slots
 	if reqSlot >= tm.numberOfSlots || reqSlot < 0 {
@@ -106,7 +114,7 @@ func (tm *TableManager) GetPlayer(reqSlot int) Player {
 // | 0 | 1 | 2 | 3 | 4 | 5 |
 // number of slots = 6, from slot = 2 , it < 8
 // 2, 3, 4, 5, 0, 1
-func (tm *TableManager) NextPlayer(fromSlot int, status PlayerStatus) Player {
+func (tm *TableManager) NextPlayer(fromSlot int, status msgpb.PlayerStatusType) Player {
 	// Log next from slot
 	log.Println("----------------------------------------------")
 	log.Printf("Find next player from slot=%d with status=%v\n", fromSlot, status)
@@ -130,7 +138,7 @@ func (tm *TableManager) NextPlayer(fromSlot int, status PlayerStatus) Player {
 	return nil
 }
 
-func (tm *TableManager) GetListOfOtherPlayers(exceptSlot int, expect ...PlayerStatus) []Player {
+func (tm *TableManager) GetListOfOtherPlayers(exceptSlot int, expect ...msgpb.PlayerStatusType) []Player {
 	otherPlayers := make([]Player, 0)
 	for slot, p := range tm.players {
 		if p != nil && slot != exceptSlot {
@@ -144,7 +152,7 @@ func (tm *TableManager) GetListOfOtherPlayers(exceptSlot int, expect ...PlayerSt
 	return otherPlayers
 }
 
-func (tm *TableManager) GetListOfPlayers(expect ...PlayerStatus) []Player {
+func (tm *TableManager) GetListOfPlayers(expect ...msgpb.PlayerStatusType) []Player {
 	players := make([]Player, 0)
 	for _, p := range tm.players {
 		if p != nil {
@@ -161,7 +169,7 @@ func (tm *TableManager) GetListOfPlayers(expect ...PlayerStatus) []Player {
 func (tm *TableManager) IsAllPlayersActed() bool {
 	// Check if all players have acted
 	for _, p := range tm.players {
-		if p != nil && p.Status() == PlayerStatus_Wait4Act || p.Status() == PlayerStatus_Playing {
+		if p != nil && p.Status() == msgpb.PlayerStatusType_Wait4Act || p.Status() == msgpb.PlayerStatusType_Playing {
 			return false
 		}
 	}
@@ -171,7 +179,7 @@ func (tm *TableManager) IsAllPlayersActed() bool {
 func (tm *TableManager) IsAllOthersFold(ex int) bool {
 	// Check if all other players have folded
 	for _, p := range tm.players {
-		if p != nil && p.Position() != ex && p.Status() != PlayerStatus_Fold {
+		if p != nil && p.Position() != ex && p.Status() != msgpb.PlayerStatusType_Fold {
 			return false
 		}
 	}
@@ -182,7 +190,7 @@ func (tm *TableManager) GetOnlyOnePlayingPlayer() Player {
 	// Get only one playing player
 	var playingPlayer Player
 	for _, p := range tm.players {
-		if p != nil && p.Status() == PlayerStatus_Playing {
+		if p != nil && p.Status() == msgpb.PlayerStatusType_Playing {
 			if playingPlayer != nil {
 				return nil
 			}
@@ -190,6 +198,23 @@ func (tm *TableManager) GetOnlyOnePlayingPlayer() Player {
 		}
 	}
 	return playingPlayer
+}
+
+func (tm *TableManager) CheckAndUpdatePlayerReadiness(minStack int) bool {
+	mylog.Debugf("Check player readiness with min stack=%d\n", minStack)
+	// Check if all players are ready
+	for _, p := range tm.players {
+		if p != nil {
+			// If chip >= min chip
+			if p.Chips() < minStack {
+				mylog.Errorf("Player %s has not enough chips\n", p.Name())
+				return false
+			} else {
+				p.UpdateStatus(msgpb.PlayerStatusType_Playing)
+			}
+		}
+	}
+	return true
 }
 
 func (tm *TableManager) ResetForNewGame() {

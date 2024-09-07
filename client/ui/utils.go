@@ -4,10 +4,25 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strings"
+
+	msgpb "go-pk-server/gen"
 
 	rw "github.com/mattn/go-runewidth"
 	wordwrap "github.com/mitchellh/go-wordwrap"
 )
+
+func NoActionsToUIButtons(p *msgpb.PlayerState) (buttons []UIButtonType, ok bool) {
+	if p == nil {
+		return nil, false
+	}
+	if p.Status == msgpb.PlayerStatusType_Wait4Act {
+		for _, a := range p.NoActions {
+			buttons = append(buttons, UIButtonType(a))
+		}
+	}
+	return buttons, len(buttons) > 0
+}
 
 // InterfaceSlice takes an []interface{} represented as an interface{} and converts it
 // https://stackoverflow.com/questions/12753805/type-converting-slices-of-interfaces-in-go
@@ -24,6 +39,22 @@ func InterfaceSlice(slice interface{}) []interface{} {
 	}
 
 	return ret
+}
+
+// FixStringLength ensures the string is exactly 'length' characters.
+// If the string is shorter, it will pad it with 'padChar'.
+// If it's longer, it will truncate the string.
+func FixStringLength(s string, length int, padChar rune) string {
+	currentLength := len(s)
+
+	// If the string is longer than the required length, truncate it
+	if currentLength > length {
+		return s[:length]
+	}
+
+	// If the string is shorter, pad it with the specified character
+	padding := strings.Repeat(string(padChar), length-currentLength)
+	return s + padding
 }
 
 // TrimString trims a string to a max length and adds '…' to the end if it was trimmed.

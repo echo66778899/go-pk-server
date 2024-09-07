@@ -2,21 +2,24 @@ package ui
 
 import "image"
 
-type ButtonType int
+type UIButtonType int
 
 const (
-	BNT_FoldButton  ButtonType = 0
-	BNT_CheckButton ButtonType = 1
-	BNT_CallButton  ButtonType = 2
-	BNT_RaiseButton ButtonType = 3
-	BNT_AllInButton ButtonType = 4
+	// Define values for UIButtonType must correspond to the order of PlayerGameActionType
+	BNT_FoldButton  UIButtonType = 0
+	BNT_CheckButton UIButtonType = 1
+	BNT_CallButton  UIButtonType = 2
+	BNT_RaiseButton UIButtonType = 3
+	BNT_AllInButton UIButtonType = 4
 
-	BNT_JoinTableButton   ButtonType = 5
-	BNT_StartGameButton   ButtonType = 6
-	BNT_LeaveGameButton   ButtonType = 7
-	BNT_RequestChipButton ButtonType = 8
+	BNT_PauseGameButton    UIButtonType = 5
+	BNT_ResumeGameButton   UIButtonType = 6
+	BNT_StartGameButton    UIButtonType = 7
+	BNT_LeaveGameButton    UIButtonType = 8
+	BNT_RequestBuyinButton UIButtonType = 9
+	BNT_PaybackBuyinButton UIButtonType = 10
 
-	BNT_SlotButton ButtonType = 9
+	BNT_JoinSlotButton UIButtonType = 20
 )
 
 type Button struct {
@@ -27,12 +30,12 @@ type Button struct {
 	DefaultStyle Style
 
 	// Controller is the controller that handles the button's actions.
-	Type       ButtonType
+	Type       UIButtonType
 	isSelected bool
 	isDisable  bool
 }
 
-func NewButton(text string, t ButtonType) *Button {
+func NewButton(text string, t UIButtonType) *Button {
 	return &Button{
 		Block:        *NewBlock(),
 		Text:         "  " + text + "  ",

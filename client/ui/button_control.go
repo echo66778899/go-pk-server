@@ -3,14 +3,16 @@ package ui
 import (
 	"log"
 	"strconv"
+
+	gpbmessage "go-pk-server/gen"
 )
 
-type ButtonMenuType int
+type UIButtonMenuType int
 
 const (
-	ButtonMenuType_PLAYING_BTN ButtonMenuType = 0
-	ButtonMenuType_CTRL_BTN    ButtonMenuType = 1
-	ButtonMenuType_SLOTS_BTN   ButtonMenuType = 2
+	ButtonMenuType_PLAYING_BTN UIButtonMenuType = 0
+	ButtonMenuType_CTRL_BTN    UIButtonMenuType = 1
+	ButtonMenuType_SLOTS_BTN   UIButtonMenuType = 2
 )
 
 type ButtonCtrlCenter struct {
@@ -26,14 +28,15 @@ type ButtonCtrlCenter struct {
 	raisePannel *RaiseWidget
 
 	// For control buttons
-	joinTableBtn   *Button
+	pauseGameBtn   *Button
 	startGameBtn   *Button
 	leaveGameBtn   *Button
 	requestChipBtn *Button
+	paybackChipBtn *Button
 
 	// ButtonCtrl is the controller for the buttons.
 	availableSlots   int
-	selectingBtnMenu ButtonMenuType
+	selectingBtnMenu UIButtonMenuType
 	CtrlEnabled      bool
 	PlayingButtons   []*Button
 	ControlButtons   []*Button
@@ -57,10 +60,11 @@ func NewButtonCtrlCenter() *ButtonCtrlCenter {
 
 		raisePannel: NewRaiseWidget(),
 
-		joinTableBtn:   NewButton("Join Table", BNT_JoinTableButton),
+		pauseGameBtn:   NewButton("Pause Game", BNT_PauseGameButton),
 		startGameBtn:   NewButton("Start Game", BNT_StartGameButton),
 		leaveGameBtn:   NewButton("Leave Game", BNT_LeaveGameButton),
-		requestChipBtn: NewButton("Request Chip", BNT_RequestChipButton),
+		requestChipBtn: NewButton("Request Buy-In", BNT_RequestBuyinButton),
+		paybackChipBtn: NewButton("Payback Buy-In", BNT_PaybackBuyinButton),
 
 		CtrlEnabled: true,
 	}
@@ -86,15 +90,16 @@ func (b *ButtonCtrlCenter) InitButtonPosition() {
 	b.raisePannel.SetCoordinator((b.X0*2+step*7)/2+5, b.Y-8)
 	b.raisePannel.MaxVal = 5000
 
-	numberOfButton = 4
+	numberOfButton = 5
 	step = (CONTROL_PANEL_X_RIGHT - b.X0) / numberOfButton
 	// Set the center of the button
-	b.joinTableBtn.SetCenterCoordinator((b.X0*2+step)/2, b.Y)
-	b.startGameBtn.SetCenterCoordinator((b.X0*2+step*3)/2, b.Y)
+	b.startGameBtn.SetCenterCoordinator((b.X0*2+step)/2, b.Y)
+	b.pauseGameBtn.SetCenterCoordinator((b.X0*2+step*3)/2, b.Y)
 	b.leaveGameBtn.SetCenterCoordinator((b.X0*2+step*5)/2, b.Y)
 	b.requestChipBtn.SetCenterCoordinator((b.X0*2+step*7)/2, b.Y)
+	b.paybackChipBtn.SetCenterCoordinator((b.X0*2+step*9)/2, b.Y)
 	// Add the control buttons to the list
-	b.ControlButtons = []*Button{b.joinTableBtn, b.startGameBtn, b.leaveGameBtn, b.requestChipBtn}
+	b.ControlButtons = []*Button{b.startGameBtn, b.pauseGameBtn, b.leaveGameBtn, b.requestChipBtn, b.paybackChipBtn}
 }
 
 func (b *ButtonCtrlCenter) GetDisplayingButton() []Drawable {
@@ -131,7 +136,7 @@ func (b *ButtonCtrlCenter) GetDisplayingButton() []Drawable {
 
 func (b *ButtonCtrlCenter) UpdateState() {
 	players := UI_MODEL_DATA.Players
-	log.Printf("Players: %v, MaxPlayers: %v", players, UI_MODEL_DATA.MaxPlayers)
+	log.Print("ButtonCtrlCenter updated")
 
 	// Calculate the number of available slots from the player list
 	available := UI_MODEL_DATA.MaxPlayers
@@ -153,7 +158,7 @@ func (b *ButtonCtrlCenter) UpdateState() {
 		b.SlotsButtons = make([]*Button, 0)
 		for slot, empty := range emptySlots {
 			if empty {
-				btn := NewButton("Slot "+strconv.Itoa(slot), BNT_SlotButton)
+				btn := NewButton("Slot "+strconv.Itoa(slot), BNT_JoinSlotButton)
 				btn.SetCenterCoordinator((b.X0*2+(step*((2*i)+1)))/2, b.Y)
 				b.SlotsButtons = append(b.SlotsButtons, btn)
 				i++
@@ -187,13 +192,36 @@ func (b *ButtonCtrlCenter) GetSelectingButtons() []*Button {
 	return make([]*Button, 0)
 }
 
-func (b *ButtonCtrlCenter) SetMenu(sel ButtonMenuType) {
+func (b *ButtonCtrlCenter) SetMenu(sel UIButtonMenuType) {
 	b.selectingBtnMenu = sel
+}
+
+func (b *ButtonCtrlCenter) DisableListButton(p *gpbmessage.PlayerState) {
+	if p == nil {
+		return
+	}
+	notAllowAction := p.GetNoActions()
+	if len(notAllowAction) <= 0 {
+		return
+	}
+	// Create a set (map) of types to disable for faster lookup
+	disableSet := make(map[gpbmessage.PlayerGameActionType]struct{}, len(notAllowAction))
+	for _, t := range notAllowAction {
+		disableSet[t] = struct{}{}
+	}
+
+	// Iterate over buttons and disable only if in the disableSet
+	for _, btn := range b.GetSelectingButtons() {
+		if _, found := disableSet[gpbmessage.PlayerGameActionType(btn.Type)]; found {
+			btn.Enable(false)
+		}
+	}
 }
 
 func (b *ButtonCtrlCenter) EnableButtonCtrl(enabled bool) {
 	b.CtrlEnabled = enabled
 	log.Printf("ButtonCtrlCenter - EnableButtonCtrl: %v", enabled)
+
 	for _, btn := range b.GetSelectingButtons() {
 		btn.Enable(enabled)
 	}
@@ -206,7 +234,7 @@ func (b *ButtonCtrlCenter) Enter() {
 	}
 	for _, btn := range b.GetSelectingButtons() {
 		if btn.IsSelected() {
-			if btn.Type == BNT_SlotButton {
+			if btn.Type == BNT_JoinSlotButton {
 				convertToSlotNo := func(s string) int {
 					// [space][space]Slot[Space][Number][space][space]
 					slot, _ := strconv.Atoi(s[7 : len(s)-2])
@@ -265,17 +293,44 @@ func (b *ButtonCtrlCenter) MoveLeft() {
 	buttons := b.GetSelectingButtons()
 	btnMax := len(buttons)
 
+	// Find the currently selected button
+	var currentIndex int = -1
 	for i, btn := range buttons {
 		if btn.IsSelected() {
+			currentIndex = i
 			btn.Unselect()
-			i = (i + btnMax - 1) % btnMax
-			buttons[i].Select()
+			break
+		}
+	}
+
+	// If no button was selected, start from the last button
+	if currentIndex == -1 {
+		currentIndex = btnMax
+	}
+
+	// Move to the previous enabled button
+	for j := 1; j <= btnMax; j++ {
+		prevIndex := (currentIndex + btnMax - j) % btnMax
+		if buttons[prevIndex].IsEnabled() {
+			buttons[prevIndex].Select()
 			return
 		}
 	}
-	if btnMax > 0 {
-		buttons[btnMax-1].Select()
+
+	for i, btn := range buttons {
+		if btn.IsSelected() {
+			btn.Unselect()
+			for j := 1; j < btnMax; j++ {
+				prevIndex := (i + btnMax - j) % btnMax
+				if buttons[prevIndex].IsEnabled() {
+					buttons[prevIndex].Select()
+					return
+				}
+			}
+		}
 	}
+	// If no enabled buttons were found, select the last one
+	buttons[btnMax-1].Select()
 }
 
 func (b *ButtonCtrlCenter) MoveRight() {
@@ -287,15 +342,30 @@ func (b *ButtonCtrlCenter) MoveRight() {
 	buttons := b.GetSelectingButtons()
 	btnMax := len(buttons)
 
+	// Find the currently selected button
+	var currentIndex int = -1
 	for i, btn := range buttons {
 		if btn.IsSelected() {
+			currentIndex = i
 			btn.Unselect()
-			i = (i + 1) % btnMax
-			buttons[i].Select()
+			break
+		}
+	}
+
+	// If no button was selected, start from the first button
+	if currentIndex == -1 {
+		currentIndex = -1
+	}
+
+	// Move to the next enabled button
+	for j := 1; j <= btnMax; j++ {
+		nextIndex := (currentIndex + j) % btnMax
+		if buttons[nextIndex].IsEnabled() {
+			buttons[nextIndex].Select()
 			return
 		}
 	}
-	if btnMax > 0 {
-		buttons[0].Select()
-	}
+
+	// If no enabled buttons were found, select the first one
+	buttons[0].Select()
 }

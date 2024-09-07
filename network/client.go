@@ -60,19 +60,19 @@ func (c *Client) handleMessage(message *msgpb.ClientMessage) {
 		switch x.PlayerAction.ActionType {
 		case "fold":
 			mylog.Infof("Client player %s folded", c.Username)
-			core.MyGame.PlayerAction(c.player.NewReAct(core.Fold, 0))
+			core.MyGame.PlayerAction(c.player.NewReAct(msgpb.PlayerGameActionType_FOLD, 0))
 		case "call":
 			mylog.Infof("Client player %s called", c.Username)
-			core.MyGame.PlayerAction(c.player.NewReAct(core.Call, 0))
+			core.MyGame.PlayerAction(c.player.NewReAct(msgpb.PlayerGameActionType_CALL, 0))
 		case "check":
 			mylog.Infof("Client player %s checked", c.Username)
-			core.MyGame.PlayerAction(c.player.NewReAct(core.Check, 0))
+			core.MyGame.PlayerAction(c.player.NewReAct(msgpb.PlayerGameActionType_CHECK, 0))
 		case "raise":
 			mylog.Infof("Client player %s raised", c.Username)
-			core.MyGame.PlayerAction(c.player.NewReAct(core.Raise, int(x.PlayerAction.RaiseAmount)))
+			core.MyGame.PlayerAction(c.player.NewReAct(msgpb.PlayerGameActionType_RAISE, int(x.PlayerAction.RaiseAmount)))
 		case "allin":
 			mylog.Infof("Client player %s all-in", c.Username)
-			core.MyGame.PlayerAction(c.player.NewReAct(core.AllIn, 0))
+			core.MyGame.PlayerAction(c.player.NewReAct(msgpb.PlayerGameActionType_ALLIN, 0))
 		default:
 			mylog.Errorf("Server not support player action type: %v", x.PlayerAction.ActionType)
 		}
@@ -82,31 +82,8 @@ func (c *Client) handleMessage(message *msgpb.ClientMessage) {
 		c.player.UpdatePosition(int(x.JoinGame.ChooseSlot))
 		core.MyGame.PlayerJoin(c.player)
 		mylog.Infof("Client player %s joined the game", c.Username)
-	case *msgpb.ClientMessage_ControlMessage:
-		// Handle the custom control message
-		mylog.Debugf("Control Message: %+v\n", x.ControlMessage)
-		switch x.ControlMessage {
-		case "request_buyin":
-			mylog.Infof("Client player %s requested 1 buyin", c.Username)
-			c.player.AddChips(1 * 2000)
-		case "start_game":
-			mylog.Infof("Client player %s started the game", c.Username)
-			core.MyGame.StartGame()
-		case "next_game":
-			mylog.Infof("Client player %s next the game", c.Username)
-			core.MyGame.NextGame()
-		case "sync_game_state":
-			mylog.Infof("Client player %s requested to sync game state", c.Username)
-			gsMsg := core.MyGame.SyncGameState()
-			c.send(&msgpb.ServerMessage{
-				Message: &msgpb.ServerMessage_GameState{
-					GameState: gsMsg,
-				},
-			})
-		default:
-			mylog.Errorf("Server not support control message type: %v", x.ControlMessage)
-		}
-
+	case *msgpb.ClientMessage_ControlAction:
+		core.MyGame.ControlAction(x.ControlAction)
 	default:
 		mylog.Error("Unknown message type.")
 	}

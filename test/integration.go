@@ -7,7 +7,7 @@ import (
 	pk_eng "go-pk-server/core"
 )
 
-func NewPlayerAction(position int, actionType pk_eng.PlayerActType, amount int) pk_eng.ActionIf {
+func NewPlayerAction(position int, actionType pk_eng.msgpb.PlayerGameActionType, amount int) pk_eng.ActionIf {
 	return &pk_eng.PlayerAction{
 		PlayerPosition: position,
 		ActionType:     actionType,

@@ -8,11 +8,12 @@ import (
 	msgpb "go-pk-server/gen"
 	"log"
 	"os"
+	"time"
 )
 
 var (
-	i    int = 1000
-	TEST     = true
+	SKIP_LOGIN_ROOM    = true
+	AUTO_ENTER_REQUEST = true
 	// pointsChan         = make(chan int)
 	keyboardEventsChan = make(chan ui.KeyboardEvent)
 )
@@ -27,25 +28,8 @@ var (
 	dealerIcon *ui.DealerWidget
 	playerWg   *ui.PlayersGroup
 	btnCtrl    *ui.ButtonCtrlCenter
+	l          *ui.List
 )
-
-func testGame() {
-	centerText.Text = fmt.Sprintf("i = %d", i)
-	dealerIcon.IndexUI(i%6, 6)
-
-	playerWg.UpdateState(true)
-	if i%2 == 0 {
-		playerWg.UpdatePocketPair(nil)
-	} else {
-		playerWg.UpdatePocketPair(&msgpb.PeerState{
-			PlayerCards: []*msgpb.Card{
-				{Suit: msgpb.SuitType_HEARTS, Rank: msgpb.RankType_DEUCE},
-				{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_SEVEN},
-			},
-		})
-	}
-	btnCtrl.UpdateState()
-}
 
 func initClient() {
 	// Table
@@ -58,8 +42,8 @@ func initClient() {
 	board.SetCoodinate(ui.COMMUNITY_CARDS_X, ui.COMMUNITY_CARDS_Y)
 
 	// New central text box
-	centerText = ui.NewParagraph()
-	centerText.SetRect(ui.TABLE_CENTER_X-10, ui.TABLE_CENTER_Y+2, ui.TABLE_CENTER_X-10+22, ui.TABLE_CENTER_Y+5)
+	centerText = ui.NewTextBox()
+	centerText.SetRect(ui.TABLE_CENTER_X-12, ui.TABLE_CENTER_Y+2, ui.TABLE_CENTER_X-12+24, ui.TABLE_CENTER_Y+5)
 
 	// Dealer Icon
 	dealerIcon = ui.NewDealerWidget()
@@ -71,18 +55,70 @@ func initClient() {
 	// Buttons
 	btnCtrl = ui.NewButtonCtrlCenter()
 	btnCtrl.InitButtonPosition()
+
+	// List balance info
+	l = ui.NewList()
+	// l.Rows = []string{
+	// 	"[0] github.com/gizak/termui/v3",
+	// 	"[1] [你好，世界](fg:blue)",
+	// 	"[2] [こんにちは世界](fg:red)",
+	// 	"[3] [color](fg:white,bg:green) output",
+	// 	"[4] output.go",
+	// 	"[5] random_out.go",
+	// 	"[6] dashboard.go",
+	// 	"[7] foo",
+	// 	"[8] bar",
+	// 	"[9] baz",
+	// }33
+	l.TextStyle = ui.NewStyle(ui.ColorYellow)
+	l.WrapText = false
+	l.SetRect(ui.BALANCE_INFO_X, ui.BALANCE_INFO_Y, ui.BALANCE_INFO_X+29, 12)
 }
 
 func render() {
-	uiItems := []ui.Drawable{table, board, centerText, dealerIcon}
+	uiItems := []ui.Drawable{table, board, centerText, dealerIcon, l}
 	uiItems = append(uiItems, playerWg.GetAllItems()...)
 	uiItems = append(uiItems, btnCtrl.GetDisplayingButton()...)
 	ui.Render(uiItems...)
 }
 
-func getRoomInfoInput() (playerName, room, passcode, sessId string) {
-	if TEST {
-		return "Hai Phan", "2", "1", "0"
+// Just for testing
+func autoChoseSlotAndBuyIn(selection string) {
+
+	profiles := map[string]int{
+		"1": 2,
+		"2": 4,
+		"3": 0,
+	}
+
+	if AUTO_ENTER_REQUEST {
+		join := msgpb.ClientMessage{
+			Message: &msgpb.ClientMessage_JoinGame{
+				JoinGame: &msgpb.JoinGame{
+					ChooseSlot: int32(profiles[selection]),
+				},
+			},
+		}
+		agent.SendingMessage(&join)
+		time.Sleep(100 * time.Millisecond)
+		agent.SendingMessage(factoryCtrlMessage("request_buyin",
+			int32(profiles[selection])))
+	}
+}
+
+func getRoomInfoInput(selection string) (playerName, room, passcode, sessId string) {
+	if SKIP_LOGIN_ROOM {
+		profiles := map[string]struct{ name, room, passcode, sessId string }{
+			"1": {"Hai Phan", "2", "1", "0"},
+			"2": {"Quynh Mi", "2", "1", "0"},
+			"3": {"Thalaba", "2", "1", "0"},
+		}
+		if _, ok := profiles[selection]; !ok {
+			log.Println("Profile not found")
+			os.Exit(128)
+		}
+		return profiles[selection].name, profiles[selection].room,
+			profiles[selection].passcode, profiles[selection].sessId
 	}
 
 	// Enter the authentication details
@@ -137,10 +173,13 @@ func factoryAction(action string, amount ...int) *msgpb.ClientMessage {
 	}
 }
 
-func factoryCtrlMessage(ctrl string) *msgpb.ClientMessage {
+func factoryCtrlMessage(ctrl string, opts ...int32) *msgpb.ClientMessage {
 	return &msgpb.ClientMessage{
-		Message: &msgpb.ClientMessage_ControlMessage{
-			ControlMessage: ctrl,
+		Message: &msgpb.ClientMessage_ControlAction{
+			ControlAction: &msgpb.ControlAction{
+				ControlType: ctrl,
+				Options:     opts,
+			},
 		},
 	}
 }
@@ -148,7 +187,7 @@ func factoryCtrlMessage(ctrl string) *msgpb.ClientMessage {
 func buttonEnterEvtHandler(opt ...int) {
 	log.Printf("Button Enter Event Handler: %v", opt)
 
-	bt := ui.ButtonType(opt[0])
+	bt := ui.UIButtonType(opt[0])
 	switch bt {
 	case ui.BNT_FoldButton:
 		agent.SendingMessage(factoryAction("fold"))
@@ -162,13 +201,20 @@ func buttonEnterEvtHandler(opt ...int) {
 		}
 	case ui.BNT_AllInButton:
 		agent.SendingMessage(factoryAction("allin"))
-	case ui.BNT_JoinTableButton:
+	case ui.BNT_PauseGameButton:
+		agent.SendingMessage(factoryCtrlMessage("pause_game"))
 	case ui.BNT_StartGameButton:
 		agent.SendingMessage(factoryCtrlMessage("start_game"))
 	case ui.BNT_LeaveGameButton:
-	case ui.BNT_RequestChipButton:
-		agent.SendingMessage(factoryCtrlMessage("request_buyin"))
-	case ui.BNT_SlotButton:
+		agent.SendingMessage(factoryCtrlMessage("leave_game",
+			int32(ui.UI_MODEL_DATA.YourTablePosition)))
+	case ui.BNT_RequestBuyinButton:
+		agent.SendingMessage(factoryCtrlMessage("request_buyin",
+			int32(ui.UI_MODEL_DATA.YourTablePosition)))
+	case ui.BNT_PaybackBuyinButton:
+		agent.SendingMessage(factoryCtrlMessage("payback_buyin",
+			int32(ui.UI_MODEL_DATA.YourTablePosition)))
+	case ui.BNT_JoinSlotButton:
 		if len(opt) > 1 {
 			join := msgpb.ClientMessage{
 				Message: &msgpb.ClientMessage_JoinGame{
@@ -178,13 +224,16 @@ func buttonEnterEvtHandler(opt ...int) {
 				},
 			}
 			agent.SendingMessage(&join)
-			ui.UI_MODEL_DATA.YourTablePosition = opt[1]
 		}
 	default:
 	}
 }
 
+// Main can be run with the following command:
+// go run main.go 1
+// go run main.go 2
 func main() {
+	// Set up the log file
 	logFile, err := os.OpenFile("client.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("Failed to open log file: %v", err)
@@ -194,10 +243,31 @@ func main() {
 	// Redirect log output to the file
 	log.SetOutput(logFile)
 
+	// Get the profile number from the command line
+	args := os.Args
+
+	// The first argument (args[0]) is the program's name
+	log.Println("Program Name:", args[0])
+	profile := ""
+	// Check if there are additional arguments
+	if len(args) > 1 {
+		log.Println("Arguments passed:")
+		for i, arg := range args[1:] {
+			// Convert the argument to an integer
+			log.Printf("Arg %d: %s\n", i+1, arg)
+		}
+		// convert the argument to an integer
+		profile = args[1]
+	} else {
+		log.Println("No arguments were passed.")
+		SKIP_LOGIN_ROOM = false
+	}
+
+	// Connect to the server
 	if agent.Connect() {
 		// Send a message to the server
-		n, r, p, s := getRoomInfoInput()
-		ui.UI_MODEL_DATA.YourUsernameID = n
+		n, r, p, s := getRoomInfoInput(profile)
+		ui.UI_MODEL_DATA.YourLoginUsernameID = n
 
 		msg := msgpb.ClientMessage{
 			Message: &msgpb.ClientMessage_JoinRoom{
@@ -229,6 +299,9 @@ func main() {
 	// handler for server message
 	h := handler.Handler{UI_Model: &ui.UI_MODEL_DATA}
 
+	// if testing auto chose slot and request buyin
+	autoChoseSlotAndBuyIn(profile)
+
 	// Game looop
 	for {
 		// Process input and server message
@@ -236,10 +309,8 @@ func main() {
 		case ev := <-keyboardEventsChan:
 			switch ev.EventType {
 			case ui.LEFT:
-				i--
 				btnCtrl.MoveLeft()
 			case ui.RIGHT:
-				i++
 				btnCtrl.MoveRight()
 			case ui.UP:
 				btnCtrl.MoveUp()
@@ -255,6 +326,14 @@ func main() {
 				} else {
 					btnCtrl.EnableButtonCtrl(true)
 				}
+			case ui.REQCHIP:
+				agent.SendingMessage(factoryCtrlMessage("request_buyin",
+					int32(ui.UI_MODEL_DATA.YourTablePosition)))
+			case ui.PAYBACK:
+				agent.SendingMessage(factoryCtrlMessage("payback_buyin",
+					int32(ui.UI_MODEL_DATA.YourTablePosition)))
+			case ui.NEXT:
+				agent.SendingMessage(factoryCtrlMessage("start_game"))
 			case ui.MENU1:
 				btnCtrl.SetMenu(ui.ButtonMenuType_PLAYING_BTN)
 				btnCtrl.EnableButtonCtrl(true)
@@ -271,25 +350,33 @@ func main() {
 			h.HandleServerMessage(m)
 		}
 
-		// Check player state to enable/disable button control
-		for _, p := range ui.UI_MODEL_DATA.Players {
-			if p.TablePosition == int32(ui.UI_MODEL_DATA.YourTablePosition) {
-				if p.Status == "PlayerStatus_Wait4Act" {
-					btnCtrl.EnableButtonCtrl(true)
-				}
-				break
-			}
-		}
+		// Update UI element state based on the model
+		btnCtrl.SetMenu(ui.UI_MODEL_DATA.ActiveButtonMenu)
+		btnCtrl.EnableButtonCtrl(ui.UI_MODEL_DATA.IsButtonEnabled)
+		btnCtrl.UpdateState()
+		btnCtrl.DisableListButton(ui.UI_MODEL_DATA.YourPlayerState)
 
-		// Update UI state based on the model
 		playerWg.UpdateState(true)
 		playerWg.UpdateGroupPlayers(ui.UI_MODEL_DATA.MaxPlayers)
 		playerWg.UpdatePocketPair(ui.UI_MODEL_DATA.YourPrivateState)
-		board.SetCards(ui.UI_MODEL_DATA.CommunityCards)
-		btnCtrl.UpdateState()
-		dealerIcon.IndexUI(ui.UI_MODEL_DATA.DealerPosition, ui.UI_MODEL_DATA.MaxPlayers)
-		centerText.Text = fmt.Sprintf("%s POT: %d", ui.UI_MODEL_DATA.CurrentRound.String(), ui.UI_MODEL_DATA.Pot)
 
+		// If current round is not SHOWDOWN, update all player's pocket pair
+		if ui.UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_SHOWDOWN &&
+			ui.UI_MODEL_DATA.Result != nil {
+			for _, p := range ui.UI_MODEL_DATA.Result.ShowingCards {
+				if p != nil {
+					playerWg.UpdatePocketPairAtPosition(int(p.TablePos), p)
+				}
+			}
+		}
+
+		board.SetCards(ui.UI_MODEL_DATA.CommunityCards)
+		centerText.Text = fmt.Sprintf("%s [POT:%d]\n", ui.UI_MODEL_DATA.CurrentRound.String(), ui.UI_MODEL_DATA.Pot)
+
+		dealerIcon.IndexUI(ui.UI_MODEL_DATA.DealerPosition, ui.UI_MODEL_DATA.MaxPlayers)
+		dealerIcon.SetVisible(ui.UI_MODEL_DATA.IsDealerVisible)
+
+		l.Rows = ui.UI_MODEL_DATA.PlayersBalance
 		//testGame()
 
 		// Render UI elements

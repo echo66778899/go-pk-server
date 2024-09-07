@@ -9,7 +9,7 @@ type TextBox struct {
 	WrapText  bool
 }
 
-func NewParagraph() *TextBox {
+func NewTextBox() *TextBox {
 	return &TextBox{
 		Block:     *NewBlock(),
 		TextStyle: Theme.Paragraph.Text,

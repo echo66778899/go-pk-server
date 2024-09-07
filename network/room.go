@@ -11,9 +11,11 @@ import (
 type Room struct {
 	RoomId   int
 	Passcode string
+	AdminId  string
 
 	// Reference to the room's game
-	settingGetter func() *msgpb.GameSetting
+	settingGetter   func() *msgpb.GameSetting
+	gameStateGetter func() *msgpb.GameState
 
 	// List of clients in the room
 	people map[userId]*Client
@@ -23,10 +25,11 @@ type Room struct {
 	mtx sync.Mutex
 }
 
-func NewRoom(id int, pass string) *Room {
+func NewRoom(id int, pass string, admin string) *Room {
 	return &Room{
 		RoomId:   id,
 		Passcode: pass,
+		AdminId:  admin,
 		people:   make(map[userId]*Client),
 	}
 }
@@ -37,8 +40,9 @@ func (r *Room) Serve() {
 	go r.handleBroadcastMessage()
 }
 
-func (r *Room) SetSettingGetter(getter func() *msgpb.GameSetting) {
+func (r *Room) SetSettingGetter(getter func() *msgpb.GameSetting, stateGetter func() *msgpb.GameState) {
 	r.settingGetter = getter
+	r.gameStateGetter = stateGetter
 }
 
 // Satisfy the PublicRoom interface
@@ -60,6 +64,18 @@ func (r *Room) AddClient(c *Client) {
 		})
 		if err != nil {
 			mylog.Errorf("Failed to send game setting to %s: %v", c.Username, err)
+		}
+	}
+	// Send the game state to the client
+	if r.gameStateGetter != nil {
+		state := r.gameStateGetter()
+		err := c.send(&msgpb.ServerMessage{
+			Message: &msgpb.ServerMessage_GameState{
+				GameState: state,
+			},
+		})
+		if err != nil {
+			mylog.Errorf("Failed to send game state to %s: %v", c.Username, err)
 		}
 	}
 }

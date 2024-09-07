@@ -29,6 +29,7 @@ func (pg *PlayersGroup) UpdateState(force bool) {
 		for _, p := range pg.PlayersUI {
 			p.SetPlayers(nil)
 		}
+		pg.ShiftStep = 0
 		for _, p := range players {
 			if p == nil {
 				continue
@@ -75,7 +76,7 @@ func (pg *PlayersGroup) UpdateGroupPlayers(maxOtherPlayers int) {
 	}
 	pg.MaxPlayers = maxOtherPlayers
 
-	pg.RefLayout = OTHER_PLAYERS[UI_MODEL_DATA.MaxPlayers]
+	pg.RefLayout = PLAYER_LAYOUT[UI_MODEL_DATA.MaxPlayers]
 	if pg.RefLayout == nil {
 		panic(fmt.Sprintf("No layout found for %d other players", UI_MODEL_DATA.MaxPlayers))
 	}
@@ -97,11 +98,12 @@ func (pg *PlayersGroup) GetAllItems() []Drawable {
 	return items
 }
 
+func (pg *PlayersGroup) UpdatePocketPairAtPosition(table_idx int, pb *msgpb.PeerState) {
+	ui_idx := (table_idx + pg.ShiftStep) % UI_MODEL_DATA.MaxPlayers
+	pg.PlayersUI[ui_idx].SetPocketPair(pb)
+}
+
 func (pg *PlayersGroup) UpdatePocketPair(pb *msgpb.PeerState) {
 	pp := pg.PlayersUI[0]
-	if pp == nil {
-		return
-	}
-
 	pp.SetPocketPair(pb)
 }
