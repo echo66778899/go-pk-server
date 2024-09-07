@@ -34,6 +34,7 @@ func handleGameState(gs *msgpb.GameState) {
 	log.Printf("Game State: %+v\n", gs)
 	ui.UI_MODEL_DATA.Players = gs.Players
 	ui.UI_MODEL_DATA.DealerPosition = int(gs.DealerId)
+	ui.UI_MODEL_DATA.CurrentRound = gs.CurrentRound
 
 	// Check if username is in the list of players
 	for _, player := range gs.Players {

@@ -320,6 +320,79 @@ func (g *GameEngine) GetGameSetting() *msgpb.GameSetting {
 
 // SyncGameState synchronizes the game state.
 func (g *GameEngine) SyncGameState() *msgpb.GameState {
+	// Create a message to sync the game state
+
+	fakeGameState := &msgpb.GameState{
+		Players:        make([]*msgpb.Player, 0),
+		PotSize:        1000,
+		DealerId:       0,
+		CommunityCards: make([]*msgpb.Card, 0),
+		CurrentBet:     0,
+		CurrentRound:   msgpb.RoundStateType_PREFLOP,
+		FinalResult: &msgpb.Result{
+			WinnerPosition: 3,
+			WonChip:        1000,
+			ShowingCards: []*msgpb.PeerState{
+				{
+					TablePos: 4,
+					PlayerCards: []*msgpb.Card{
+						{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_ACE},
+						{Suit: msgpb.SuitType_DIAMONDS, Rank: msgpb.RankType_KING},
+					},
+				},
+				{
+					TablePos: 4,
+					PlayerCards: []*msgpb.Card{
+						{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_ACE},
+						{Suit: msgpb.SuitType_DIAMONDS, Rank: msgpb.RankType_KING},
+					},
+				},
+			},
+		},
+	}
+	fakeGameState.CommunityCards = []*msgpb.Card{
+		{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_ACE},
+		{Suit: msgpb.SuitType_DIAMONDS, Rank: msgpb.RankType_KING},
+		{Suit: msgpb.SuitType_CLUBS, Rank: msgpb.RankType_QUEEN},
+		{Suit: msgpb.SuitType_HEARTS, Rank: msgpb.RankType_JACK},
+		{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_TEN},
+	}
+	fakeGameState.Players = []*msgpb.Player{
+		{
+			Name:          "player1",
+			Chips:         1500,
+			TablePosition: 0,
+			Status:        "Playing",
+		},
+		{
+			Name:          "player2",
+			Chips:         2000,
+			TablePosition: 1,
+			Status:        "Wait4Act",
+		},
+		{
+			Name:          "player3",
+			Chips:         4000,
+			TablePosition: 2,
+			Status:        "Fold",
+		},
+		{
+			Name:          "player4",
+			Chips:         3000,
+			TablePosition: 4,
+			Status:        "Check",
+		},
+		{
+			Name:          "player5",
+			Chips:         4800,
+			TablePosition: 5,
+			Status:        "Raise",
+			CurrentBet:    200,
+		},
+	}
+
+	return fakeGameState
+
 	syncMsg := &msgpb.GameState{
 		Players:        make([]*msgpb.Player, 0),
 		PotSize:        int32(g.game.gs.pot.Size()),

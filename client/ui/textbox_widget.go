@@ -34,7 +34,7 @@ func (tb *TextBox) Draw(buf *Buffer) {
 		}
 		row = TrimCells(row, tb.Inner.Dx())
 		for _, cx := range BuildCellWithXArray(row) {
-			x, cell := cx.X, cx.Cell
+			x, cell := cx.X+1, cx.Cell
 			buf.SetCell(cell, image.Pt(x, y).Add(tb.Inner.Min))
 		}
 	}

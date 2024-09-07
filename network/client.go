@@ -44,6 +44,7 @@ func (c *Client) send(message *msgpb.ServerMessage) error {
 		mylog.Errorf("Failed to write message to client: %v", err)
 		return err
 	}
+	mylog.Debugf("Sent message with length %d to %s", len(sendData), c.Username)
 	return nil
 }
 

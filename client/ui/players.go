@@ -51,6 +51,14 @@ func (pg *PlayersGroup) UpdateState(force bool) {
 		table_idx := int(p.TablePosition)
 		ui_idx := (table_idx + pg.ShiftStep) % UI_MODEL_DATA.MaxPlayers // 1 + 5 % 6 = 0
 		pg.PlayersUI[ui_idx].SetPlayers(p)
+
+		// Set current bet amount for the player
+		if UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_PREFLOP ||
+			UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_FLOP ||
+			UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_TURN ||
+			UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_RIVER {
+			pg.PlayersUI[ui_idx].SetCurBet(int(p.CurrentBet))
+		}
 	}
 
 	for i, p := range pg.PlayersUI {

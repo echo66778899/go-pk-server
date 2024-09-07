@@ -12,21 +12,21 @@ import (
 type PlayerStatus int
 
 const (
-	SatOut   PlayerStatus = iota // Player is sat out and not playing
-	SatIn                        // Player is sat in and waiting for the game to start
-	Playing                      // Player is playing
-	Wait4Act                     // Player is waiting for their turn
-	Checked                      // Player has checked
-	Called                       // Player has called
-	Raised                       // Player has raised
-	Folded                       // Player has folded
-	AlledIn                      // Player has all in
+	PlayerStatus_SatOut   PlayerStatus = 0 // Player is sat out and not playing
+	PlayerStatus_SatIn    PlayerStatus = 1 // Player is sat in and waiting for the game to start
+	PlayerStatus_Playing  PlayerStatus = 2 // Player is playing
+	PlayerStatus_Wait4Act PlayerStatus = 3 // Player is waiting for their turn
+	PlayerStatus_Check    PlayerStatus = 4 // Player has checked
+	PlayerStatus_Call     PlayerStatus = 5 // Player has called
+	PlayerStatus_Raise    PlayerStatus = 6 // Player has raised
+	PlayerStatus_Fold     PlayerStatus = 7 // Player has folded
+	PlayerStatus_AllIn    PlayerStatus = 8 // Player has all in
 )
 
 // String of PlayerStatus
 func (ps PlayerStatus) String() string {
-	return [...]string{"SatOut", "SatIn", "Playing", "Wait4Act", "Checked",
-		"Called", "Raised", "Folded", "AlledIn"}[ps]
+	return [...]string{"Sat Out", "Sat In", "Playing", "Wait4Act",
+		"Check", "Call", "Raise", "Fold", "All In"}[ps]
 }
 
 // Game logic state

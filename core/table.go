@@ -71,7 +71,7 @@ func (tm *TableManager) RemovePlayer(reqSlot int) {
 func (tm *TableManager) GetNumberOfPlayingPlayers() int {
 	count := 0
 	for _, p := range tm.players {
-		if p != nil && p.Status() == Playing {
+		if p != nil && p.Status() == PlayerStatus_Playing {
 			log.Printf("Player %s status: %v, chips: %d\n", p.Name(), p.Status(), p.Chips())
 			count++
 		}
@@ -161,7 +161,7 @@ func (tm *TableManager) GetListOfPlayers(expect ...PlayerStatus) []Player {
 func (tm *TableManager) IsAllPlayersActed() bool {
 	// Check if all players have acted
 	for _, p := range tm.players {
-		if p != nil && p.Status() == Wait4Act || p.Status() == Playing {
+		if p != nil && p.Status() == PlayerStatus_Wait4Act || p.Status() == PlayerStatus_Playing {
 			return false
 		}
 	}
@@ -171,7 +171,7 @@ func (tm *TableManager) IsAllPlayersActed() bool {
 func (tm *TableManager) IsAllOthersFold(ex int) bool {
 	// Check if all other players have folded
 	for _, p := range tm.players {
-		if p != nil && p.Position() != ex && p.Status() != Folded {
+		if p != nil && p.Position() != ex && p.Status() != PlayerStatus_Fold {
 			return false
 		}
 	}
@@ -182,7 +182,7 @@ func (tm *TableManager) GetOnlyOnePlayingPlayer() Player {
 	// Get only one playing player
 	var playingPlayer Player
 	for _, p := range tm.players {
-		if p != nil && p.Status() == Playing {
+		if p != nil && p.Status() == PlayerStatus_Playing {
 			if playingPlayer != nil {
 				return nil
 			}

@@ -12,12 +12,15 @@ type PlayerPanel struct {
 	player *msgpb.Player
 	ppInfo *msgpb.PeerState
 
-	Slot int
+	InfoTextStyle Style
+	Slot          int
+	CurBet        int
 }
 
 func NewPlayerPanel() *PlayerPanel {
 	return &PlayerPanel{
-		Block: *NewBlock(),
+		Block:         *NewBlock(),
+		InfoTextStyle: NewStyle(ColorWhite, ColorBlack, ModifierBold),
 	}
 }
 
@@ -46,8 +49,25 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 		return
 	}
 
+	status := ""
 	if pp.player != nil {
 		pp.Title = pp.player.Name
+		status = pp.player.Status
+		// Update style based on player status
+		switch status {
+		case "Wait4Act":
+			pp.TitleStyle = NewStyle(ColorGreen, ColorBlack, ModifierBold)
+			pp.BorderStyle = NewStyle(ColorGreen, ColorBlack, ModifierBold)
+			status = ""
+		case "Fold":
+			pp.TitleStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
+			pp.BorderStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
+			pp.InfoTextStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
+		case "Check", "Call", "Bet", "Raise", "AllIn":
+			pp.TitleStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.BorderStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.InfoTextStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+		}
 	}
 
 	// Trim title to fit in the block
@@ -64,7 +84,7 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 	// Draw player chips
 	buf.SetCell(Cell{SHADED_BLOCKS[2], NewStyle(ColorGreen)}, image.Pt(pp.Inner.Min.X+2, pp.Inner.Min.Y+chipLine))
 	chips := fmt.Sprintf("%d", pp.player.Chips)
-	cells := ParseStyles(chips, pp.TitleStyle)
+	cells := ParseStyles(chips, pp.InfoTextStyle)
 	for x, cell := range cells {
 		if x+pp.Inner.Min.X+4 >= pp.Inner.Max.X {
 			break
@@ -73,13 +93,24 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 	}
 
 	// Draw player status
-	status := pp.player.Status
-	cells = ParseStyles(status, pp.TitleStyle)
+	cells = ParseStyles(status, pp.InfoTextStyle)
 	for x, cell := range cells {
 		if x+pp.Inner.Min.X+3 >= pp.Inner.Max.X {
 			break
 		}
 		buf.SetCell(cell, image.Pt(x+pp.Inner.Min.X+3, pp.Inner.Min.Y+statusLine))
+	}
+
+	// Draw the current bet amount > 0
+	if pp.CurBet > 0 {
+		curBetChars := fmt.Sprintf("%d\n", pp.CurBet)
+		cells = ParseStyles(curBetChars, pp.InfoTextStyle)
+		for x, cell := range cells {
+			if x+pp.Inner.Min.X+3 >= pp.Inner.Max.X {
+				break
+			}
+			buf.SetCell(cell, image.Pt(x+pp.Inner.Min.X+3, pp.Inner.Min.Y+statusLine+1))
+		}
 	}
 
 	if pp.ppInfo != nil {
@@ -119,6 +150,10 @@ func (pp *PlayerPanel) SetSlot(slot int) {
 func (pp *PlayerPanel) SetPocketPair(pb *msgpb.PeerState) {
 	pp.ppInfo = pb
 	pp.SetRect(pp.Min.X, pp.Min.Y, pp.Min.X+14, pp.Min.Y+7)
+}
+
+func (pp *PlayerPanel) SetCurBet(bet int) {
+	pp.CurBet = bet
 }
 
 func (pp *PlayerPanel) SetCoodinate(x, y int) {

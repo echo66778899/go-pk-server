@@ -113,8 +113,8 @@ func (p *OnlinePlayer) AddChips(amount int) {
 	p.chips += amount
 	fmt.Printf("Player %s's chips are added by %d. Total chips: %d\n", p.name, amount, p.chips)
 	// If player is sat out, set status to playing
-	if p.status == SatOut {
-		p.status = Playing
+	if p.status == PlayerStatus_SatOut {
+		p.status = PlayerStatus_Playing
 	}
 }
 
@@ -123,9 +123,9 @@ func (p *OnlinePlayer) UpdateSuggestions(suggestions []PlayerActType) {
 }
 
 func (p *OnlinePlayer) ResetForNewRound() {
-	if (p.status != Folded) && (p.status != AlledIn) {
+	if (p.status != PlayerStatus_Fold) && (p.status != PlayerStatus_AllIn) {
 		fmt.Printf("Player %s is reset for new round\n", p.name)
-		p.status = Playing
+		p.status = PlayerStatus_Playing
 	}
 	p.currentBet = 0
 }
@@ -134,9 +134,9 @@ func (p *OnlinePlayer) ResetForNewGame() {
 	// Print player name
 	fmt.Printf("Player %s is reset for new game\n", p.name)
 	if p.chips > 0 {
-		p.status = Playing
+		p.status = PlayerStatus_Playing
 	} else {
-		p.status = SatOut
+		p.status = PlayerStatus_SatOut
 	}
 	p.currentBet = 0
 	p.hand.Reset()
@@ -194,7 +194,7 @@ func (p *OnlinePlayer) NotifyPlayerIfNewHand() {
 
 func (p *OnlinePlayer) RandomSuggestionAction() PlayerAction {
 	// check if nil list
-	if len(p.suggestAction) == 0 || p.chips == 0 || p.status == Folded || p.status != Wait4Act {
+	if len(p.suggestAction) == 0 || p.chips == 0 || p.status == PlayerStatus_Fold || p.status != PlayerStatus_Wait4Act {
 		return PlayerAction{
 			PlayerPosition: p.position,
 			ActionType:     Unknown,

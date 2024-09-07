@@ -73,7 +73,7 @@ func (g *Game) HandleActions(action ActionIf) {
 		return
 	}
 
-	if player.Status() != Wait4Act {
+	if player.Status() != PlayerStatus_Wait4Act {
 		// Log warning the player is not allowed to fold, the action is invalid
 		fmt.Println("error: Player", player.Name(), "is not allowed to ", action.WhatAction(), ", the action is invalid")
 		return
@@ -85,7 +85,7 @@ func (g *Game) HandleActions(action ActionIf) {
 	switch action.WhatAction() {
 	case Fold:
 		// Execute fold action
-		player.UpdateStatus(Folded)
+		player.UpdateStatus(PlayerStatus_Fold)
 		player.UpdateSuggestions([]PlayerActType{})
 		// Decrease the number of playing players
 		g.gs.NumPlayingPlayer--
@@ -94,7 +94,7 @@ func (g *Game) HandleActions(action ActionIf) {
 		// Execute check action
 		// Check if the player is allowed to check
 		if player.CurrentBet() == g.gs.CurrentBet {
-			player.UpdateStatus(Checked)
+			player.UpdateStatus(PlayerStatus_Check)
 		} else {
 			// Log info the player name is not allowed to check, the action is invalid
 			fmt.Println("error: Player", player.Name(), "is not allowed to check, the action is invalid")
@@ -106,11 +106,11 @@ func (g *Game) HandleActions(action ActionIf) {
 		if player.Chips() <= callChip {
 			player.UpdateCurrentBet(player.Chips() + player.CurrentBet())
 			player.TakeChips(player.Chips())
-			player.UpdateStatus(AlledIn)
+			player.UpdateStatus(PlayerStatus_AllIn)
 		} else {
 			player.UpdateCurrentBet(callChip + player.CurrentBet())
 			player.TakeChips(callChip)
-			player.UpdateStatus(Called)
+			player.UpdateStatus(PlayerStatus_Call)
 		}
 		g.gs.pot.AddToPot(player.Position(), callChip)
 		g.gs.CurrentBet = player.CurrentBet()
@@ -125,18 +125,18 @@ func (g *Game) HandleActions(action ActionIf) {
 			raiseAmount += callAmount
 			player.UpdateCurrentBet(raiseAmount + player.CurrentBet())
 			player.TakeChips(raiseAmount)
-			player.UpdateStatus(Raised)
+			player.UpdateStatus(PlayerStatus_Raise)
 			g.gs.pot.AddToPot(player.Position(), raiseAmount)
 		} else {
 			raiseAmount := player.Chips()
 			player.UpdateCurrentBet(raiseAmount + player.CurrentBet())
 			player.TakeChips(raiseAmount)
-			player.UpdateStatus(AlledIn)
+			player.UpdateStatus(PlayerStatus_AllIn)
 		}
 		g.gs.CurrentBet = player.CurrentBet()
-		// Update all player status to Playing and NextPlayer to Wait4Act
-		for _, p := range g.tm.GetListOfOtherPlayers(action.FromWho(), Called, Raised, Checked) {
-			p.UpdateStatus(Playing)
+		// Update all player status to PlayerStatus_Playing and NextPlayer to PlayerStatus_Wait4Act
+		for _, p := range g.tm.GetListOfOtherPlayers(action.FromWho(), PlayerStatus_Call, PlayerStatus_Raise, PlayerStatus_Check) {
+			p.UpdateStatus(PlayerStatus_Playing)
 		}
 	case AllIn:
 		// Execute all-in action
@@ -144,13 +144,13 @@ func (g *Game) HandleActions(action ActionIf) {
 		if allInAmount > g.gs.CurrentBet {
 			player.UpdateCurrentBet(allInAmount + player.CurrentBet())
 			player.TakeChips(allInAmount)
-			player.UpdateStatus(AlledIn)
+			player.UpdateStatus(PlayerStatus_AllIn)
 			g.gs.pot.AddToPot(player.Position(), allInAmount)
 			g.gs.CurrentBet = player.CurrentBet()
 
-			// Update all player status to Playing and NextPlayer to Wait4Act
-			for _, p := range g.tm.GetListOfOtherPlayers(action.FromWho(), Called, Raised, Checked) {
-				p.UpdateStatus(Playing)
+			// Update all player status to PlayerStatus_Playing and NextPlayer to PlayerStatus_Wait4Act
+			for _, p := range g.tm.GetListOfOtherPlayers(action.FromWho(), PlayerStatus_Call, PlayerStatus_Raise, PlayerStatus_Check) {
+				p.UpdateStatus(PlayerStatus_Playing)
 			}
 		} else {
 			// Log warning the player should go all-in
@@ -162,10 +162,10 @@ func (g *Game) HandleActions(action ActionIf) {
 		return
 	}
 
-	fmt.Printf("AFTER  Current bet: %d, Number of Playing: %d\n", g.gs.CurrentBet, g.gs.NumPlayingPlayer)
+	fmt.Printf("AFTER  Current bet: %d, Number of PlayerStatus_Playing: %d\n", g.gs.CurrentBet, g.gs.NumPlayingPlayer)
 
-	if np := g.tm.NextPlayer(action.FromWho(), Playing); np != nil {
-		np.UpdateStatus(Wait4Act)
+	if np := g.tm.NextPlayer(action.FromWho(), PlayerStatus_Playing); np != nil {
+		np.UpdateStatus(PlayerStatus_Wait4Act)
 		switch action.WhatAction() {
 		case Check, Fold:
 			if g.gs.CurrentBet == 0 {
@@ -229,7 +229,7 @@ func (g *Game) resetGameStateForNewRound() {
 func (g *Game) updateDealerPostion(firstGame bool) {
 	if firstGame {
 		// Select the first dealer, choose the player next to the last player
-		p := g.tm.NextPlayer(g.tm.GetMaxNoSlot()-1, Playing)
+		p := g.tm.NextPlayer(g.tm.GetMaxNoSlot()-1, PlayerStatus_Playing)
 		if p == nil {
 			// Log error when selecting the first dealer
 			fmt.Println("error: Can not select the first dealer")
@@ -239,15 +239,15 @@ func (g *Game) updateDealerPostion(firstGame bool) {
 		fmt.Printf("Selecting the first dealer: %s\n", g.tm.GetPlayer(g.gs.ButtonPosition).Name())
 		return
 	}
-	nextButton := g.tm.NextPlayer(g.gs.ButtonPosition, Playing).Position()
+	nextButton := g.tm.NextPlayer(g.gs.ButtonPosition, PlayerStatus_Playing).Position()
 	// Log dealer position
 	fmt.Printf("Moving dealer from player %v to player %v\n", g.tm.GetPlayer(g.gs.ButtonPosition).Name(), g.tm.GetPlayer(nextButton).Name())
 	g.gs.ButtonPosition = nextButton
 }
 
 func (g *Game) takeBlinds() {
-	sbPlayer := g.tm.NextPlayer(g.gs.ButtonPosition, Playing)
-	bbPlayer := g.tm.NextPlayer(sbPlayer.Position(), Playing)
+	sbPlayer := g.tm.NextPlayer(g.gs.ButtonPosition, PlayerStatus_Playing)
+	bbPlayer := g.tm.NextPlayer(sbPlayer.Position(), PlayerStatus_Playing)
 
 	if sbPlayer == nil || bbPlayer == nil {
 		// Log error when taking blinds
@@ -273,8 +273,8 @@ func (g *Game) takeBlinds() {
 	fmt.Printf("Big blind %s takes %d chips\n", bbPlayer.Name(), int(g.setting.BigBlind))
 
 	// Update the next active player
-	np := g.tm.NextPlayer(bbPlayer.Position(), Playing)
-	np.UpdateStatus(Wait4Act)
+	np := g.tm.NextPlayer(bbPlayer.Position(), PlayerStatus_Playing)
+	np.UpdateStatus(PlayerStatus_Wait4Act)
 	np.UpdateSuggestions([]PlayerActType{Fold, Call, Raise, AllIn})
 }
 
@@ -380,10 +380,10 @@ func (g *Game) firstPlayerActionInRound() bool {
 	}
 
 	// First player to act is the player next to the dealer
-	np := g.tm.NextPlayer(g.gs.ButtonPosition, Playing)
+	np := g.tm.NextPlayer(g.gs.ButtonPosition, PlayerStatus_Playing)
 
 	if np != nil {
-		np.UpdateStatus(Wait4Act)
+		np.UpdateStatus(PlayerStatus_Wait4Act)
 		np.UpdateSuggestions([]PlayerActType{Check, Raise, AllIn})
 		return true
 	}
@@ -408,6 +408,7 @@ func (g *Game) handleEnterNewRoundLogic() {
 		if !g.firstPlayerActionInRound() {
 			g.dealTheRestOfCommunityCards()
 			g.evaluateHands()
+			g.prepareForIncomingGame()
 		} else {
 			g.gs.CurrentRound = msgpb.RoundStateType_TURN
 		}
@@ -418,6 +419,7 @@ func (g *Game) handleEnterNewRoundLogic() {
 		if !g.firstPlayerActionInRound() {
 			g.dealTheRestOfCommunityCards()
 			g.evaluateHands()
+			g.prepareForIncomingGame()
 		} else {
 			g.gs.CurrentRound = msgpb.RoundStateType_RIVER
 		}
@@ -429,12 +431,11 @@ func (g *Game) handleEnterNewRoundLogic() {
 			g.dealTheRestOfCommunityCards()
 			g.evaluateHands()
 			g.prepareForIncomingGame()
-		} else {
-			g.evaluateHands()
 		}
 		g.gs.CurrentRound = msgpb.RoundStateType_SHOW_DOWN
 	case msgpb.RoundStateType_SHOW_DOWN:
 		// Evaluate hands to find the winner for main pot and side pot
+		g.evaluateHands()
 		g.prepareForIncomingGame()
 	}
 }
@@ -442,7 +443,7 @@ func (g *Game) handleEnterNewRoundLogic() {
 func (g *Game) evaluateHands() {
 	if g.gs.NumPlayingPlayer == 1 {
 		// Log the winner
-		onePlayer := g.tm.GetListOfPlayers(Playing, Called, Checked, Raised, AlledIn)
+		onePlayer := g.tm.GetListOfPlayers(PlayerStatus_Playing, PlayerStatus_Call, PlayerStatus_Check, PlayerStatus_Raise, PlayerStatus_AllIn)
 		if len(onePlayer) != 1 {
 			panic("error: more than one player in the game")
 		}
@@ -455,7 +456,7 @@ func (g *Game) evaluateHands() {
 		var winner Player
 		// Printf all players that will be evaluated
 		for _, p := range g.tm.players {
-			if p != nil && p.Status() != Folded {
+			if p != nil && p.Status() != PlayerStatus_Fold {
 				fmt.Printf("Evaluating player %s: [%s]\n", p.Name(), p.ShowHand().String())
 				p.ShowHand().Evaluate(&g.gs.cc)
 				// Print its rank

@@ -12,7 +12,7 @@ import (
 
 var (
 	i    int = 1000
-	TEST     = false
+	TEST     = true
 	// pointsChan         = make(chan int)
 	keyboardEventsChan = make(chan ui.KeyboardEvent)
 )
@@ -33,28 +33,6 @@ func testGame() {
 	centerText.Text = fmt.Sprintf("i = %d", i)
 	dealerIcon.IndexUI(i%6, 6)
 
-	// ui.UI_MODEL_DATA.Players = []*msgpb.Player{
-	// 	// {
-	// 	// 	Name:          "player1",
-	// 	// 	Chips:         1500,
-	// 	// 	TablePosition: 0,
-	// 	// },
-	// 	{
-	// 		Name:          "player2",
-	// 		Chips:         2000,
-	// 		TablePosition: 1,
-	// 	},
-	// 	{
-	// 		Name:          "player3",
-	// 		Chips:         4000,
-	// 		TablePosition: 2,
-	// 	},
-	// 	{
-	// 		Name:          "Hai",
-	// 		Chips:         3000,
-	// 		TablePosition: 4,
-	// 	},
-	// }
 	playerWg.UpdateState(true)
 	if i%2 == 0 {
 		playerWg.UpdatePocketPair(nil)
@@ -81,7 +59,7 @@ func initClient() {
 
 	// New central text box
 	centerText = ui.NewParagraph()
-	centerText.SetRect(ui.TABLE_CENTER_X-10, ui.TABLE_CENTER_Y+2, ui.TABLE_CENTER_X-10+21, ui.TABLE_CENTER_Y+5)
+	centerText.SetRect(ui.TABLE_CENTER_X-10, ui.TABLE_CENTER_Y+2, ui.TABLE_CENTER_X-10+22, ui.TABLE_CENTER_Y+5)
 
 	// Dealer Icon
 	dealerIcon = ui.NewDealerWidget()
@@ -104,7 +82,7 @@ func render() {
 
 func getRoomInfoInput() (playerName, room, passcode, sessId string) {
 	if TEST {
-		return "Hai Phan", "2222", "1234", "0"
+		return "Hai Phan", "2", "1", "0"
 	}
 
 	// Enter the authentication details
@@ -296,7 +274,7 @@ func main() {
 		// Check player state to enable/disable button control
 		for _, p := range ui.UI_MODEL_DATA.Players {
 			if p.TablePosition == int32(ui.UI_MODEL_DATA.YourTablePosition) {
-				if p.Status == "Wait4Act" {
+				if p.Status == "PlayerStatus_Wait4Act" {
 					btnCtrl.EnableButtonCtrl(true)
 				}
 				break
@@ -310,6 +288,7 @@ func main() {
 		board.SetCards(ui.UI_MODEL_DATA.CommunityCards)
 		btnCtrl.UpdateState()
 		dealerIcon.IndexUI(ui.UI_MODEL_DATA.DealerPosition, ui.UI_MODEL_DATA.MaxPlayers)
+		centerText.Text = fmt.Sprintf("%s POT: %d", ui.UI_MODEL_DATA.CurrentRound.String(), ui.UI_MODEL_DATA.Pot)
 
 		//testGame()
 

@@ -16,6 +16,8 @@ type Model struct {
 	Players        []*msgpb.Player
 	CommunityCards []*msgpb.Card
 	DealerPosition int
+	CurrentRound   msgpb.RoundStateType
+	Pot            int
 	// Current user
 	YourTablePosition int
 	YourUsernameID    string
