@@ -2,7 +2,6 @@ package engine
 
 import (
 	msgpb "go-pk-server/gen"
-	mylog "go-pk-server/log"
 	"strings"
 )
 
@@ -68,7 +67,6 @@ func (h *Hand) BestHandString() string {
 }
 
 func (h *Hand) GetPlayerHandRanking(kicker msgpb.RankType) string {
-	mylog.Infof("GetPlayerHandRanking tiebreaker: %v", h.bestTiebreaker)
 	var kickerString string
 	if kicker > msgpb.RankType_UNSPECIFIED_RANK {
 		kickerString = " WITH " + kicker.String() + " KICKER"

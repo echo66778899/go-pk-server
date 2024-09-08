@@ -533,7 +533,7 @@ func (x *PeerState) GetPlayerCards() []*Card {
 	return nil
 }
 
-func (x *PeerState) GetPlayerHandRanking() string {
+func (x *PeerState) GetHandRanking() string {
 	if x != nil {
 		return x.HandRanking
 	}

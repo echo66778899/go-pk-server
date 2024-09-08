@@ -660,23 +660,24 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 						// New winner, clear the list of winners
 						winners = []Player{p}
 					} else if p.ShowHand().Compare(winners[0].ShowHand()) == 0 {
+						// Log the tiebreakers
+						mylog.Debugf("Same ranking!! Compare tiebreakers newP=%v preWinner=%v\n",
+							p.ShowHand().SortedDecendingRankValue(), winners[0].ShowHand().SortedDecendingRankValue())
 						// Compare the kicker
 						if r := compareTiebreakers(p.ShowHand().SortedDecendingRankValue(),
 							winners[0].ShowHand().SortedDecendingRankValue()); r > 0 {
+							mylog.Debugf("New player [%s] > Previous winner [%s]\n", p.Name(), winners[0].Name())
 							// set new winner
 							winners = []Player{p}
 						} else if r == 0 {
-							mylog.Debugf("Player %s and player %s have the same hand ranking [%s==%s]\n",
+							mylog.Debugf("Player [%s] and player [%s] equal hand ranking and tiebreaks [%s==%s]\n",
 								p.Name(), winners[0].Name(),
-								p.ShowHand().GetPlayerHandRanking(0),
-								winners[0].ShowHand().GetPlayerHandRanking(0))
+								p.ShowHand().GetPlayerHandRanking(0), winners[0].ShowHand().GetPlayerHandRanking(0))
 							// Add the player to the list of winners
 							winners = append(winners, p)
 						} else {
 							// Log this edge case
-							mylog.Warnf("Winner is still win when comparing tiebreakers [%v] > [%v]\n",
-								winners[0].ShowHand().SortedDecendingRankValue(),
-								p.ShowHand().SortedDecendingRankValue())
+							mylog.Debugf("Pre winner [%s] still wins when comparing tiebreakers", winners[0].Name())
 						}
 					}
 				}

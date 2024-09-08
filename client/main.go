@@ -29,6 +29,7 @@ var (
 	playerWg   *ui.PlayersGroup
 	btnCtrl    *ui.ButtonCtrlCenter
 	l          *ui.List
+	rankDisp   *ui.RankingText
 )
 
 func initClient() {
@@ -73,12 +74,16 @@ func initClient() {
 	l.TextStyle = ui.NewStyle(ui.ColorYellow)
 	l.WrapText = false
 	l.SetRect(ui.BALANCE_INFO_X, ui.BALANCE_INFO_Y, ui.BALANCE_INFO_X+29, 12)
+
+	// Ranking display
+	rankDisp = ui.NewRankingText()
 }
 
 func render() {
 	uiItems := []ui.Drawable{table, board, centerText, dealerIcon, l}
 	uiItems = append(uiItems, playerWg.GetAllItems()...)
 	uiItems = append(uiItems, btnCtrl.GetDisplayingButton()...)
+	uiItems = append(uiItems, rankDisp.GetDisplayingTexts()...)
 	ui.Render(uiItems...)
 }
 
@@ -354,11 +359,7 @@ func main() {
 			case ui.SPACE:
 				agent.SendingMessage(factoryCtrlMessage("sync_game_state"))
 			case ui.BACKSPACE:
-				if btnCtrl.CtrlEnabled {
-					btnCtrl.EnableButtonCtrl(false)
-				} else {
-					btnCtrl.EnableButtonCtrl(true)
-				}
+				agent.SendingMessage(factoryCtrlMessage("request_game_end"))
 			case ui.MENU1:
 				btnCtrl.SetMenu(ui.ButtonMenuType_PLAYING_BTN)
 				btnCtrl.EnableButtonCtrl(true)
@@ -391,11 +392,20 @@ func main() {
 		// If current round is not SHOWDOWN, update all player's pocket pair
 		if ui.UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_SHOWDOWN &&
 			ui.UI_MODEL_DATA.Result != nil {
+
+			// Update the ranking display
+			rankDisp.UpdateTextsBasedPlayers()
+
 			for _, p := range ui.UI_MODEL_DATA.Result.ShowingCards {
 				if p != nil {
 					playerWg.UpdatePocketPairAtPosition(int(p.TablePos), p)
+					rankDisp.UpdateTextAtPosition(int(p.TablePos), p)
 				}
 			}
+		} else if ui.UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_INITIAL ||
+			ui.UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_PREFLOP {
+			// Clear all the pocket pair
+			rankDisp.ClearAllTexts()
 		}
 
 		board.SetCards(ui.UI_MODEL_DATA.CommunityCards)

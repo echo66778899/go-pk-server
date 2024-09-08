@@ -233,7 +233,7 @@ func (g *GameEngine) RunGameEngine(input Input) {
 			g.needNtfAndReason(NotifyGameStateReason_NEW_ACTION)
 		case GameEnded:
 			// Log the game end
-			mylog.Info("Game ended")
+			mylog.Info("Handle Game ended event")
 			if g.game.HandleEndGame() {
 				g.needNtfAndReason(NotifyGameStateReason_NEW_GAME)
 				// Continue to play a new game
@@ -318,7 +318,7 @@ func (g *GameEngine) Initializing() {
 			BigBlind:     20,
 			TimePerTurn:  0, // 0 means no limit
 			AutoNextGame: true,
-			AutoNextTime: 10,
+			AutoNextTime: 60,
 		},
 		g.playerMgr,
 		NewDeck(),
@@ -366,8 +366,14 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 	switch ctrlActionName {
 	case "pause_game":
 		g.gotoState(EngineState_PAUSED, "Game paused by player")
-	case "resume_game":
-		g.gotoState(EngineState_PLAYING, "Game resumed by player")
+	case "request_game_end":
+		mylog.Warnf("A player has requested to END THE GAME early")
+		g.auto.StopOngoingAutoInput()
+		if g.game.HandleEndGame() {
+			g.needNtfAndReason(NotifyGameStateReason_NEW_GAME)
+			// Continue to play a new game
+			mylog.Info("Player successfully ends game to play next game")
+		}
 	case "ready_game":
 		mylog.Info("A player has readied up")
 		input := Input{Type: PlayerReady}
@@ -506,7 +512,7 @@ func (g *GameEngine) GetGameState() *msgpb.GameState {
 			peerState := &msgpb.PeerState{
 				TablePos:      int32(peer.TablePos),
 				PlayerCards:   make([]*msgpb.Card, 0),
-				HandRanking:   peer.GetPlayerHandRanking(),
+				HandRanking:   peer.GetHandRanking(),
 				EvaluatedHand: make([]*msgpb.Card, 0),
 			}
 			for _, card := range peer.PlayerCards {

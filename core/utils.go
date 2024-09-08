@@ -139,13 +139,13 @@ func evaluateHand(cards []*msgpb.Card) (msgpb.HankRankingType, []msgpb.RankType)
 			cards[4].Rank == msgpb.RankType_ACE {
 			return msgpb.HankRankingType_ROYAL_FLUSH, nil
 		}
-		return msgpb.HankRankingType_STRAIGH_FLUSH, nil
+		return msgpb.HankRankingType_STRAIGH_FLUSH, []msgpb.RankType{findHighestCard(cards)}
 	}
 
 	// Four of a Kind
-	for _, count := range valueCount {
+	for rank, count := range valueCount {
 		if count == 4 {
-			return msgpb.HankRankingType_FOUR_OF_A_KIND, nil
+			return msgpb.HankRankingType_FOUR_OF_A_KIND, []msgpb.RankType{msgpb.RankType(rank)}
 		}
 	}
 
@@ -160,7 +160,7 @@ func evaluateHand(cards []*msgpb.Card) (msgpb.HankRankingType, []msgpb.RankType)
 		}
 	}
 	if three != -1 && pair != -1 {
-		return msgpb.HankRankingType_FULL_HOUSE, nil
+		return msgpb.HankRankingType_FULL_HOUSE, []msgpb.RankType{msgpb.RankType(three), msgpb.RankType(pair)}
 	}
 
 	// FLUSH
@@ -204,9 +204,9 @@ func evaluateHand(cards []*msgpb.Card) (msgpb.HankRankingType, []msgpb.RankType)
 
 func compareTiebreakers(tiebreaker1, tiebreaker2 []msgpb.RankType) int {
 	for i := range tiebreaker1 {
-		if tiebreaker1[i] < tiebreaker2[i] {
+		if tiebreaker1[i] > tiebreaker2[i] {
 			return 1
-		} else if tiebreaker1[i] > tiebreaker2[i] {
+		} else if tiebreaker1[i] < tiebreaker2[i] {
 			return -1
 		}
 	}
