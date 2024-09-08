@@ -233,16 +233,6 @@ func buttonEnterEvtHandler(opt ...int) {
 // go run main.go 1
 // go run main.go 2
 func main() {
-	// Set up the log file
-	logFile, err := os.OpenFile("client.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("Failed to open log file: %v", err)
-	}
-	defer logFile.Close()
-
-	// Redirect log output to the file
-	log.SetOutput(logFile)
-
 	// Get the profile number from the command line
 	args := os.Args
 
@@ -283,6 +273,15 @@ func main() {
 	}
 	defer agent.Close()
 
+	// Set up the log file
+	logFile, err := os.OpenFile(ui.UI_MODEL_DATA.YourLoginUsernameID+"client.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Failed to open log file: %v", err)
+	}
+	defer logFile.Close()
+	// Redirect log output to the file
+	log.SetOutput(logFile)
+
 	// Initialize the UI
 	ui.Init()
 	defer ui.Deinit()
@@ -304,6 +303,8 @@ func main() {
 
 	// Game looop
 	for {
+		// Log
+		log.Printf("WAITING FOR NEW EVENT...\n")
 		// Process input and server message
 		select {
 		case ev := <-keyboardEventsChan:
@@ -318,6 +319,38 @@ func main() {
 				btnCtrl.MoveDown()
 			case ui.ENTER:
 				btnCtrl.Enter()
+			case ui.START_GAME:
+				agent.SendingMessage(factoryCtrlMessage("start_game"))
+			case ui.PAUSE_GAME:
+				agent.SendingMessage(factoryCtrlMessage("pause_game"))
+			case ui.LEAVE_GAME:
+				agent.SendingMessage(factoryCtrlMessage("leave_game",
+					int32(ui.UI_MODEL_DATA.YourTablePosition)))
+			case ui.TAKE_BUYIN:
+				agent.SendingMessage(factoryCtrlMessage("request_buyin",
+					int32(ui.UI_MODEL_DATA.YourTablePosition)))
+			case ui.GIVE_BUYIN:
+				agent.SendingMessage(factoryCtrlMessage("payback_buyin",
+					int32(ui.UI_MODEL_DATA.YourTablePosition)))
+			case ui.FOLD:
+				agent.SendingMessage(factoryAction("fold"))
+			case ui.CHECK_OR_CALL:
+				action := "check"
+				if ui.UI_MODEL_DATA.YourPlayerState != nil {
+					for _, a := range ui.UI_MODEL_DATA.YourPlayerState.NoActions {
+						if a == msgpb.PlayerGameActionType_CHECK {
+							action = "call"
+						}
+					}
+				}
+				agent.SendingMessage(factoryAction(action))
+			case ui.RAISE:
+				// Raise min to double the current bet
+				agent.SendingMessage(factoryAction("raise", ui.UI_MODEL_DATA.CurrentBet))
+			case ui.ALL_IN:
+				agent.SendingMessage(factoryAction("allin"))
+
+			// Menu buttons for testing
 			case ui.SPACE:
 				agent.SendingMessage(factoryCtrlMessage("sync_game_state"))
 			case ui.BACKSPACE:
@@ -326,14 +359,6 @@ func main() {
 				} else {
 					btnCtrl.EnableButtonCtrl(true)
 				}
-			case ui.REQCHIP:
-				agent.SendingMessage(factoryCtrlMessage("request_buyin",
-					int32(ui.UI_MODEL_DATA.YourTablePosition)))
-			case ui.PAYBACK:
-				agent.SendingMessage(factoryCtrlMessage("payback_buyin",
-					int32(ui.UI_MODEL_DATA.YourTablePosition)))
-			case ui.NEXT:
-				agent.SendingMessage(factoryCtrlMessage("start_game"))
 			case ui.MENU1:
 				btnCtrl.SetMenu(ui.ButtonMenuType_PLAYING_BTN)
 				btnCtrl.EnableButtonCtrl(true)
@@ -343,8 +368,11 @@ func main() {
 			case ui.MENU3:
 				btnCtrl.SetMenu(ui.ButtonMenuType_SLOTS_BTN)
 				btnCtrl.EnableButtonCtrl(true)
-			case ui.END:
+			case ui.EXIT:
 				return
+			default:
+				fmt.Println("Received unsupport key:", ev.Key)
+				continue
 			}
 		case m := <-agent.ReceivingMessage():
 			h.HandleServerMessage(m)

@@ -77,9 +77,6 @@ func (cm *ConnectionManager) serveWebSocket(w http.ResponseWriter, r *http.Reque
 	defer room.RemoveClient(conn)
 
 	for {
-		// Log waiting for message
-		mylog.Debugf("Waiting for message from player [%s]", c.Username)
-
 		msgType, blob, err := c.ws.ReadMessage()
 		if err != nil {
 			mylog.Errorf("Error reading message: %v", err)
@@ -97,10 +94,10 @@ func (cm *ConnectionManager) serveWebSocket(w http.ResponseWriter, r *http.Reque
 			continue
 		}
 
-		mylog.Debugf("Received from player %s\n", c.Username)
 		// Dispatch message to the appropriate handler
-
 		if c != nil {
+			// Log received message
+			mylog.Debugf("Received from player %s, message: %v", message.GetMessage(), c.Username)
 			c.handleMessage(message)
 		}
 	}

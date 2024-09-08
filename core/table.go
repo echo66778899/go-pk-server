@@ -208,6 +208,7 @@ func (tm *TableManager) CheckAndUpdatePlayerReadiness(minStack int) bool {
 			// If chip >= min chip
 			if p.Chips() < minStack {
 				mylog.Errorf("Player %s has not enough chips\n", p.Name())
+				p.UpdateStatus(msgpb.PlayerStatusType_Unplayable)
 				return false
 			} else {
 				p.UpdateStatus(msgpb.PlayerStatusType_Playing)

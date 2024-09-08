@@ -14,7 +14,7 @@ type Agent interface {
 type Player interface {
 	// For game engine
 	UpdatePosition(int)
-	DealCard(Card, int)
+	DealCard(*msgpb.Card, int)
 	HasNewCards() bool
 	UpdateCurrentBet(int)
 	UpdateStatus(msgpb.PlayerStatusType)
@@ -76,7 +76,7 @@ func (p *OnlinePlayer) UpdatePosition(position int) {
 }
 
 // Implement the Player interface
-func (p *OnlinePlayer) DealCard(card Card, idx int) {
+func (p *OnlinePlayer) DealCard(card *msgpb.Card, idx int) {
 	p.hand.SetCard(card, idx)
 	if idx == 1 {
 		p.isNewCard = true
@@ -131,7 +131,7 @@ func (p *OnlinePlayer) AddChips(amount int) {
 	p.chips += amount
 	mylog.Debugf("Player %s's chips are added by %d. Total chips: %d\n", p.name, amount, p.chips)
 	// If player is sat out, set status to playing
-	if p.status == msgpb.PlayerStatusType_NoStack {
+	if p.status == msgpb.PlayerStatusType_Unplayable {
 		p.status = msgpb.PlayerStatusType_Playing
 	}
 }
@@ -159,6 +159,13 @@ func (p *OnlinePlayer) ResetForNewGame() {
 	p.isNewCard = false
 	// invalid actions for ui
 	p.invalidAction = nil
+
+	if (p.status != msgpb.PlayerStatusType_Unplayable) &&
+		(p.status != msgpb.PlayerStatusType_Spectating) {
+		mylog.Debugf("Player %s's status is reset from %s to %s for new game\n",
+			p.name, p.status, msgpb.PlayerStatusType_Playing)
+		p.status = msgpb.PlayerStatusType_Playing
+	}
 }
 
 // ResetPlayerState resets the player's state as new.
@@ -168,7 +175,7 @@ func (p *OnlinePlayer) ResetPlayerState() {
 	// player state
 	p.position = 0
 	p.chips = 0
-	p.status = msgpb.PlayerStatusType_NoStack
+	p.status = msgpb.PlayerStatusType_Unplayable
 }
 
 func (p *OnlinePlayer) Position() int {
@@ -216,10 +223,7 @@ func (p *OnlinePlayer) NotifyPlayerIfNewHand() {
 	}
 	// Add the player's hand to the message
 	for _, card := range p.hand.Cards() {
-		handMsg.GetPeerState().PlayerCards = append(handMsg.GetPeerState().PlayerCards, &msgpb.Card{
-			Suit: msgpb.SuitType(card.Suit),
-			Rank: msgpb.RankType(card.Value),
-		})
+		handMsg.GetPeerState().PlayerCards = append(handMsg.GetPeerState().PlayerCards, card)
 	}
 	p.connAgent.DirectNotify(p.name, &handMsg)
 }

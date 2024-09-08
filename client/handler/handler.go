@@ -38,6 +38,7 @@ func handleGameState(gs *msgpb.GameState) {
 	ui.UI_MODEL_DATA.Players = gs.Players
 	ui.UI_MODEL_DATA.DealerPosition = int(gs.DealerId)
 	ui.UI_MODEL_DATA.CurrentRound = gs.CurrentRound
+	ui.UI_MODEL_DATA.CurrentBet = int(gs.CurrentBet)
 
 	ui.UI_MODEL_DATA.YourPlayerState = nil
 	// Check if username is in the list of players

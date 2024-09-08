@@ -5,35 +5,16 @@ package engine
 import (
 	"sort"
 	"strings"
+
+	msgpb "go-pk-server/gen"
 )
 
-// Hand ranking constants.
-type HandRanking int
-
-const (
-	HighCard HandRanking = iota
-	OnePair
-	TwoPair
-	ThreeOfAKind
-	Straight
-	Flush
-	FullHouse
-	FourOfAKind
-	StraightFlush
-	RoyalFlush
-)
-
-func (phr HandRanking) String() string {
-	return [...]string{"HighCard", "OnePair", "TwoPair", "ThreeOfAKind", "Straight",
-		"Flush", "FullHouse", "FourOfAKind", "StraightFlush", "RoyalFlush"}[phr]
-}
-
-func combinations(cards []Card, n int) [][]Card {
-	var result [][]Card
-	var comb func(start int, chosen []Card)
-	comb = func(start int, chosen []Card) {
+func combinations(cards []*msgpb.Card, n int) [][]*msgpb.Card {
+	var result [][]*msgpb.Card
+	var comb func(start int, chosen []*msgpb.Card)
+	comb = func(start int, chosen []*msgpb.Card) {
 		if len(chosen) == n {
-			combination := make([]Card, n)
+			combination := make([]*msgpb.Card, n)
 			copy(combination, chosen)
 			result = append(result, combination)
 			return
@@ -42,19 +23,19 @@ func combinations(cards []Card, n int) [][]Card {
 			comb(i+1, append(chosen, cards[i]))
 		}
 	}
-	comb(0, []Card{})
+	comb(0, []*msgpb.Card{})
 	return result
 }
 
-func countValues(cards []Card) map[int]int {
+func countValues(cards []*msgpb.Card) map[int]int {
 	valueCount := make(map[int]int)
 	for _, card := range cards {
-		valueCount[int(card.Value)]++
+		valueCount[int(card.Rank)]++
 	}
 	return valueCount
 }
 
-func isFlush(cards []Card) bool {
+func isFlush(cards []*msgpb.Card) bool {
 	firstSuit := cards[0].Suit
 	for _, card := range cards {
 		if card.Suit != firstSuit {
@@ -64,10 +45,10 @@ func isFlush(cards []Card) bool {
 	return true
 }
 
-func isStraight(cards []Card) bool {
+func isStraight(cards []*msgpb.Card) bool {
 	values := []int{}
 	for _, card := range cards {
-		values = append(values, int(card.Value))
+		values = append(values, int(card.Rank))
 	}
 
 	// Sort the values
@@ -86,35 +67,85 @@ func isStraight(cards []Card) bool {
 	return true
 }
 
-func getSortedValues(cards []Card) []int {
-	values := []int{}
-	for _, card := range cards {
-		values = append(values, int(card.Value))
+// getSortedValues returns the sorted values of the cards in descending order
+func getSortedValues(cards []*msgpb.Card) []msgpb.RankType {
+	// Create a slice to hold the rank values
+	ranks := make([]msgpb.RankType, len(cards))
+
+	// Extract the rank from each card
+	for i, card := range cards {
+		ranks[i] = card.Rank
 	}
-	sort.Sort(sort.Reverse(sort.IntSlice(values)))
-	return values
+
+	// Sort the ranks slice
+	sort.Slice(ranks, func(i, j int) bool {
+		return ranks[i] > ranks[j] // Ascending order
+	})
+
+	// Return the sorted ranks
+	return ranks
 }
 
-func evaluateHand(cards []Card) (HandRanking, []int) {
+// removes repeated elements from the input slice and sorts it in descending order
+func removeRepeatedAndSortDesc(cards []*msgpb.Card, elements []msgpb.RankType) []msgpb.RankType {
+	// Step 1: Count the number of occurrences of each element
+	filter := make(map[msgpb.RankType]bool, len(elements))
+	for _, element := range elements {
+		filter[element] = true
+	}
+
+	// Step 2: Filter out repeated elements
+	unique := []msgpb.RankType{}
+	for _, value := range cards {
+		if !filter[value.Rank] {
+			unique = append(unique, value.Rank)
+		}
+	}
+
+	// Step 3: Sort the result in descending order
+	sort.Slice(unique, func(i, j int) bool {
+		return unique[i] > unique[j]
+	})
+
+	// Return the result
+	elements = append(elements, unique...)
+
+	return elements
+}
+
+func findHighestCard(cards []*msgpb.Card) msgpb.RankType {
+	highest := cards[0].Rank
+	for _, card := range cards {
+		if card.Rank > highest {
+			highest = card.Rank
+		}
+	}
+	return highest
+}
+
+func evaluateHand(cards []*msgpb.Card) (msgpb.HankRankingType, []msgpb.RankType) {
 	valueCount := countValues(cards)
 
 	// Check for flush and straight
 	flush := isFlush(cards)
 	straight := isStraight(cards)
 
-	// Royal Flush or Straight Flush
+	// Royal FLUSH or STRAIGHT FLUSH
 	if flush && straight {
-		if cards[0].Value == Ten && cards[1].Value == Jack &&
-			cards[2].Value == Queen && cards[3].Value == King && cards[4].Value == Ace {
-			return RoyalFlush, []int{int(Ace)} // Highest card is Ace in a Royal Flush
+		if cards[0].Rank == msgpb.RankType_TEN &&
+			cards[1].Rank == msgpb.RankType_TEN &&
+			cards[2].Rank == msgpb.RankType_QUEEN &&
+			cards[3].Rank == msgpb.RankType_KING &&
+			cards[4].Rank == msgpb.RankType_ACE {
+			return msgpb.HankRankingType_ROYAL_FLUSH, nil
 		}
-		return StraightFlush, []int{int(cards[4].Value)} // Highest card in the straight flush
+		return msgpb.HankRankingType_STRAIGH_FLUSH, nil
 	}
 
 	// Four of a Kind
-	for value, count := range valueCount {
+	for _, count := range valueCount {
 		if count == 4 {
-			return FourOfAKind, []int{value}
+			return msgpb.HankRankingType_FOUR_OF_A_KIND, nil
 		}
 	}
 
@@ -129,22 +160,23 @@ func evaluateHand(cards []Card) (HandRanking, []int) {
 		}
 	}
 	if three != -1 && pair != -1 {
-		return FullHouse, []int{three, pair}
+		return msgpb.HankRankingType_FULL_HOUSE, nil
 	}
 
-	// Flush
+	// FLUSH
 	if flush {
-		return Flush, getSortedValues(cards)
+		return msgpb.HankRankingType_FLUSH, []msgpb.RankType{findHighestCard(cards)}
 	}
 
-	// Straight
+	// STRAIGHT
 	if straight {
-		return Straight, []int{int(cards[4].Value)}
+		return msgpb.HankRankingType_STRAIGHT, []msgpb.RankType{findHighestCard(cards)}
 	}
 
 	// Three of a Kind
 	if three != -1 {
-		return ThreeOfAKind, []int{three}
+		return msgpb.HankRankingType_THREE_OF_A_KIND, removeRepeatedAndSortDesc(cards,
+			[]msgpb.RankType{msgpb.RankType(int32(three))})
 	}
 
 	// Two Pair
@@ -156,23 +188,25 @@ func evaluateHand(cards []Card) (HandRanking, []int) {
 	}
 	if len(pairs) == 2 {
 		sort.Sort(sort.Reverse(sort.IntSlice(pairs)))
-		return TwoPair, pairs
+		return msgpb.HankRankingType_TWO_PAIR, removeRepeatedAndSortDesc(cards,
+			[]msgpb.RankType{msgpb.RankType(int32(pairs[0])), msgpb.RankType(int32(pairs[1]))})
 	}
 
 	// One Pair
 	if len(pairs) == 1 {
-		return OnePair, pairs
+		return msgpb.HankRankingType_ONE_PAIR, removeRepeatedAndSortDesc(cards,
+			[]msgpb.RankType{msgpb.RankType(int32(pairs[0]))})
 	}
 
 	// High Card
-	return HighCard, getSortedValues(cards)
+	return msgpb.HankRankingType_HIGH_CARD, getSortedValues(cards)
 }
 
-func compareTiebreakers(tiebreaker1, tiebreaker2 []int) int {
+func compareTiebreakers(tiebreaker1, tiebreaker2 []msgpb.RankType) int {
 	for i := range tiebreaker1 {
-		if tiebreaker1[i] > tiebreaker2[i] {
+		if tiebreaker1[i] < tiebreaker2[i] {
 			return 1
-		} else if tiebreaker1[i] < tiebreaker2[i] {
+		} else if tiebreaker1[i] > tiebreaker2[i] {
 			return -1
 		}
 	}

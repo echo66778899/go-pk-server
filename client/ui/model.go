@@ -18,6 +18,7 @@ type Model struct {
 	DealerPosition int
 	CurrentRound   msgpb.RoundStateType
 	Pot            int
+	CurrentBet     int
 	Result         *msgpb.Result
 	PlayersBalance []string
 	// Current user

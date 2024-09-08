@@ -1,74 +1,44 @@
 package engine
 
 import (
-	"fmt"
+	msgpb "go-pk-server/gen"
 	"math/rand"
 	"time"
 )
 
-type Suit int
-
-const (
-	Hearts Suit = iota
-	Diamonds
-	Clubs
-	Spades
-)
-
-func (s Suit) String() string {
-	return [...]string{"Hearts", "Diamonds", "Clubs", "Spades"}[s]
-}
-
-type Value int
-
-const (
-	Joker Value = iota
-	Two
-	Three
-	Four
-	Five
-	Six
-	Seven
-	Eight
-	Nine
-	Ten
-	Jack
-	Queen
-	King
-	Ace
-)
-
-// overwrite string method for Value
-func (v Value) String() string {
-	return [...]string{"Joker", "Two", "Three", "Four",
-		"Five", "Six", "Seven", "Eight", "Nine", "Ten",
-		"Jack", "Queen", "King", "Ace"}[v]
-}
-
-type Card struct {
-	Suit  Suit  `json:"suit"`
-	Value Value `json:"value"`
-}
-
-func (s Card) String() string {
-	return fmt.Sprintf("%s of %s", s.Value, s.Suit)
-}
-
 type Deck struct {
-	Cards  []Card
+	Cards  []*msgpb.Card
 	Dealed int
 }
 
 func NewDeck() *Deck {
-	suits := []Suit{Spades, Hearts, Diamonds, Clubs}
-	values := []Value{Ace, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King}
+	suits := []msgpb.SuitType{
+		msgpb.SuitType_SPADES,
+		msgpb.SuitType_HEARTS,
+		msgpb.SuitType_DIAMONDS,
+		msgpb.SuitType_CLUBS,
+	}
+	values := []msgpb.RankType{
+		msgpb.RankType_DEUCE,
+		msgpb.RankType_THREE,
+		msgpb.RankType_FOUR,
+		msgpb.RankType_FIVE,
+		msgpb.RankType_SIX,
+		msgpb.RankType_SEVEN,
+		msgpb.RankType_EIGHT,
+		msgpb.RankType_NINE,
+		msgpb.RankType_TEN,
+		msgpb.RankType_JACK,
+		msgpb.RankType_QUEEN,
+		msgpb.RankType_KING,
+		msgpb.RankType_ACE,
+	}
 
 	deck := &Deck{}
 
 	for _, suit := range suits {
 		for _, value := range values {
-			card := Card{Suit: suit, Value: value}
-			deck.Cards = append(deck.Cards, card)
+			deck.Cards = append(deck.Cards, &msgpb.Card{Suit: suit, Rank: value})
 		}
 	}
 
@@ -92,7 +62,7 @@ func (d *Deck) CutTheCard() {
 	d.Cards = append(d.Cards[cutIndex:], d.Cards[:cutIndex]...)
 }
 
-func (d *Deck) Draw() Card {
+func (d *Deck) Draw() *msgpb.Card {
 	card := d.Cards[d.Dealed]
 	d.Dealed++
 	return card
@@ -100,7 +70,7 @@ func (d *Deck) Draw() Card {
 
 // CommunityCards represents the community cards in a Poker game.
 type CommunityCards struct {
-	Cards []Card
+	Cards []*msgpb.Card
 }
 
 func (c CommunityCards) String() string {
@@ -111,14 +81,14 @@ func (c CommunityCards) String() string {
 	return cardsString
 }
 
-func (c *CommunityCards) GetCards() []Card {
+func (c *CommunityCards) GetCards() []*msgpb.Card {
 	return c.Cards
 }
 
-func (c *CommunityCards) AddCard(card Card) {
+func (c *CommunityCards) AddCard(card *msgpb.Card) {
 	c.Cards = append(c.Cards, card)
 }
 
 func (c *CommunityCards) Reset() {
-	c.Cards = []Card{}
+	c.Cards = []*msgpb.Card{}
 }

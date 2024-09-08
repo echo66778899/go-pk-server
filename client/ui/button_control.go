@@ -52,19 +52,19 @@ func NewButtonCtrlCenter() *ButtonCtrlCenter {
 		X0:       CONTROL_PANEL_X_LEFT,
 		X1:       CONTROL_PANEL_X_RIGHT,
 		Y:        CONTROL_PANEL_Y,
-		foldbtn:  NewButton("Fold", BNT_FoldButton),
-		checkBtn: NewButton("Check", BNT_CheckButton),
-		callBtn:  NewButton("Call", BNT_CallButton),
-		raiseBtn: NewButton("Raise", BNT_RaiseButton),
-		allInBtn: NewButton("All-In", BNT_AllInButton),
+		foldbtn:  NewButton("[F]old", BNT_FoldButton),
+		checkBtn: NewButton("[C]heck", BNT_CheckButton),
+		callBtn:  NewButton("[C]all", BNT_CallButton),
+		raiseBtn: NewButton("[R]aise", BNT_RaiseButton),
+		allInBtn: NewButton("[A]ll-In", BNT_AllInButton),
 
 		raisePannel: NewRaiseWidget(),
 
-		pauseGameBtn:   NewButton("Pause Game", BNT_PauseGameButton),
-		startGameBtn:   NewButton("Start Game", BNT_StartGameButton),
-		leaveGameBtn:   NewButton("Leave Game", BNT_LeaveGameButton),
-		requestChipBtn: NewButton("Request Buy-In", BNT_RequestBuyinButton),
-		paybackChipBtn: NewButton("Payback Buy-In", BNT_PaybackBuyinButton),
+		startGameBtn:   NewButton("[S]tart Game", BNT_StartGameButton),
+		pauseGameBtn:   NewButton("[P]ause Game", BNT_PauseGameButton),
+		leaveGameBtn:   NewButton("[L]eave Game", BNT_LeaveGameButton),
+		requestChipBtn: NewButton("[T]ake Buy-In", BNT_RequestBuyinButton),
+		paybackChipBtn: NewButton("[G]ive Buy-In", BNT_PaybackBuyinButton),
 
 		CtrlEnabled: true,
 	}
@@ -136,7 +136,6 @@ func (b *ButtonCtrlCenter) GetDisplayingButton() []Drawable {
 
 func (b *ButtonCtrlCenter) UpdateState() {
 	players := UI_MODEL_DATA.Players
-	log.Print("ButtonCtrlCenter updated")
 
 	// Calculate the number of available slots from the player list
 	available := UI_MODEL_DATA.MaxPlayers

@@ -64,22 +64,27 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 		case msgpb.PlayerStatusType_Wait4Act:
 			pp.TitleStyle = NewStyle(ColorGreen, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorGreen, ColorBlack, ModifierBold)
+			pp.InfoTextStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.CurBetStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			status = ""
 		case msgpb.PlayerStatusType_Fold:
 			pp.TitleStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 			pp.InfoTextStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 			status = msgpb.PlayerStatusType_name[int32(msgpb.PlayerStatusType_Fold)]
+			pp.CurBet = 0
 		case msgpb.PlayerStatusType_Playing:
 			pp.TitleStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			pp.InfoTextStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.CurBetStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			status = "--||--"
-		case msgpb.PlayerStatusType_NoStack:
+		case msgpb.PlayerStatusType_Unplayable:
 			pp.TitleStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 			pp.InfoTextStyle = NewStyle(ColorBlack, ColorBlack, ModifierBold)
-			status = "No Stack"
+			status = msgpb.PlayerStatusType_name[int32(pp.player.Status)]
+			pp.CurBet = 0
 		case msgpb.PlayerStatusType_LOSER:
 			pp.TitleStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)

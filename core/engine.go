@@ -100,22 +100,25 @@ type GameEngine struct {
 	balanceMgr    *BalanceManager
 	playerMgr     *TableManager
 	game          *Game
+	auto          *AutoInputProducer
 	room          PublicRoom
 
 	ntfReason NotifyGameStateReason
 
 	eState      EngineState
 	eventDriven bool
+	eInputCh    chan Input
 
-	ctx           context.Context
-	cancel        context.CancelFunc
-	GameInputChan chan Input
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 var MyGame = NewGameEngine()
 
 // NewGameEngine creates a new instance of the game engine.
 func NewGameEngine() GameEngineIf {
+	// Change to buffered channel with capacity 10
+	ch := make(chan Input, 10)
 	// Add your initialization code here
 	return &GameEngine{
 		gameSessionID: 1,
@@ -123,8 +126,8 @@ func NewGameEngine() GameEngineIf {
 		eventDriven:   false,
 		balanceMgr:    NewBalanceManager(),
 		playerMgr:     NewTableManager(),
-		GameInputChan: make(chan Input, 10), // Change to buffered channel with capacity 10
-
+		eInputCh:      ch,
+		auto:          NewAutoInputProducer(ch),
 	}
 }
 
@@ -174,13 +177,15 @@ func (g *GameEngine) PlayerAction(input ActionIf) {
 
 func (g *GameEngine) processActions(input Input) {
 	if g.eventDriven {
-		g.GameInputChan <- input
+		g.eInputCh <- input
 	} else {
 		g.RunGameEngine(input)
 	}
 }
 
-func (g *GameEngine) gotoState(newState EngineState) {
+func (g *GameEngine) gotoState(newState EngineState, ctxReason string) {
+	// log the state change
+	mylog.Infof("Game engine state change from %s to %s (%s)\n", g.eState, newState, ctxReason)
 	g.eState = newState
 }
 
@@ -188,7 +193,7 @@ func (g *GameEngine) gotoState(newState EngineState) {
 func (g *GameEngine) EngineLoop(ctx context.Context) {
 	for {
 		select {
-		case input := <-g.GameInputChan:
+		case input := <-g.eInputCh:
 			mylog.Infof("Run game engine with current %s and input: %v\n", g.eState, input.Type)
 			g.RunGameEngine(input)
 		case <-ctx.Done():
@@ -203,7 +208,7 @@ func (g *GameEngine) RunGameEngine(input Input) {
 	case EngineState_INITIALIZING:
 		// Room is created log
 		g.Initializing()
-		g.eState = EngineState_WAIT_FOR_PLAYING
+		g.gotoState(EngineState_WAIT_FOR_PLAYING, "Done Initializing")
 	case EngineState_WAIT_FOR_PLAYING:
 		// Wait for players to join, buy chip, and ready up
 		switch input.Type {
@@ -214,7 +219,7 @@ func (g *GameEngine) RunGameEngine(input Input) {
 		case PlayerReady, GameStarted:
 			// Play the game
 			if g.game.Play() {
-				g.eState = EngineState_PLAYING
+				g.gotoState(EngineState_PLAYING, "Done Game started")
 				g.needNtfAndReason(NotifyGameStateReason_NEW_GAME)
 			}
 		case GameControl:
@@ -226,6 +231,16 @@ func (g *GameEngine) RunGameEngine(input Input) {
 		case PlayerActed:
 			g.game.HandleActions(input.PlayerAct)
 			g.needNtfAndReason(NotifyGameStateReason_NEW_ACTION)
+		case GameEnded:
+			// Log the game end
+			mylog.Info("Game ended")
+			if g.game.HandleEndGame() {
+				g.needNtfAndReason(NotifyGameStateReason_NEW_GAME)
+				// Continue to play a new game
+			} else {
+				g.gotoState(EngineState_WAIT_FOR_PLAYING, "Failed to handle next game")
+				g.needNtfAndReason(NofityGameStateReason_ALL)
+			}
 		case PlayerLeft:
 			mylog.Warnf("Player %s left during the game", input.PlayerInfo.Name())
 			g.handleLeavingPlayer(input.PlayerInfo)
@@ -237,7 +252,7 @@ func (g *GameEngine) RunGameEngine(input Input) {
 	case EngineState_PAUSED:
 		switch input.Type {
 		case GameStarted:
-			g.eState = EngineState_PLAYING
+			g.gotoState(EngineState_PLAYING, "Game resumed")
 		}
 	}
 
@@ -302,9 +317,12 @@ func (g *GameEngine) Initializing() {
 			MinStackSize: 500,
 			BigBlind:     20,
 			TimePerTurn:  0, // 0 means no limit
+			AutoNextGame: true,
+			AutoNextTime: 10,
 		},
 		g.playerMgr,
 		NewDeck(),
+		g.auto,
 		g.gotoState,
 	)
 }
@@ -335,8 +353,8 @@ func (g *GameEngine) handleLeavingPlayer(player Player) {
 		}
 		// Remove and If no player left, reset the game
 		if g.playerMgr.RemovePlayer(player.Position()) < 2 {
-			g.eState = EngineState_WAIT_FOR_PLAYING
-			g.game.ResetGame()
+			g.gotoState(EngineState_WAIT_FOR_PLAYING, "Not enough players")
+			g.game.ResetGame(true)
 		}
 	}
 }
@@ -347,11 +365,9 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 	ctrlActionName := intput.ControlAct.GetControlType()
 	switch ctrlActionName {
 	case "pause_game":
-		mylog.Info("A player has paused the GAME")
-		g.eState = EngineState_PAUSED
+		g.gotoState(EngineState_PAUSED, "Game paused by player")
 	case "resume_game":
-		mylog.Info("A player has resumed the GAME")
-		g.eState = EngineState_PLAYING
+		g.gotoState(EngineState_PLAYING, "Game resumed by player")
 	case "ready_game":
 		mylog.Info("A player has readied up")
 		input := Input{Type: PlayerReady}
@@ -450,78 +466,6 @@ func (g *GameEngine) GetGameSetting() *msgpb.GameSetting {
 // GetGameState synchronizes the game state.
 func (g *GameEngine) GetGameState() *msgpb.GameState {
 	// Create a message to sync the game state
-
-	// fakeGameState := &msgpb.GameState{
-	// 	Players:        make([]*msgpb.PlayerState, 0),
-	// 	PotSize:        1000,
-	// 	DealerId:       0,
-	// 	CommunityCards: make([]*msgpb.Card, 0),
-	// 	CurrentBet:     0,
-	// 	CurrentRound:   msgpb.RoundStateType_PREFLOP,
-	// 	FinalResult: &msgpb.Result{
-	// 		WinnerPosition: 3,
-	// 		WonChip:        1000,
-	// 		ShowingCards: []*msgpb.PeerState{
-	// 			{
-	// 				TablePos: 4,
-	// 				PlayerCards: []*msgpb.Card{
-	// 					{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_ACE},
-	// 					{Suit: msgpb.SuitType_DIAMONDS, Rank: msgpb.RankType_KING},
-	// 				},
-	// 			},
-	// 			{
-	// 				TablePos: 4,
-	// 				PlayerCards: []*msgpb.Card{
-	// 					{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_ACE},
-	// 					{Suit: msgpb.SuitType_DIAMONDS, Rank: msgpb.RankType_KING},
-	// 				},
-	// 			},
-	// 		},
-	// 	},
-	// }
-	// fakeGameState.CommunityCards = []*msgpb.Card{
-	// 	{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_ACE},
-	// 	{Suit: msgpb.SuitType_DIAMONDS, Rank: msgpb.RankType_KING},
-	// 	{Suit: msgpb.SuitType_CLUBS, Rank: msgpb.RankType_QUEEN},
-	// 	{Suit: msgpb.SuitType_HEARTS, Rank: msgpb.RankType_JACK},
-	// 	{Suit: msgpb.SuitType_SPADES, Rank: msgpb.RankType_TEN},
-	// }
-	// fakeGameState.Players = []*msgpb.PlayerState{
-	// 	{
-	// 		Name:          "player1",
-	// 		Chips:         1500,
-	// 		TablePosition: 0,
-	// 		Status:        "Playing",
-	// 	},
-	// 	{
-	// 		Name:          "player2",
-	// 		Chips:         2000,
-	// 		TablePosition: 1,
-	// 		Status:        "Wait4Act",
-	// 	},
-	// 	{
-	// 		Name:          "player3",
-	// 		Chips:         4000,
-	// 		TablePosition: 2,
-	// 		Status:        "Fold",
-	// 	},
-	// 	{
-	// 		Name:          "player4",
-	// 		Chips:         3000,
-	// 		TablePosition: 4,
-	// 		Status:        "Check",
-	// 	},
-	// 	{
-	// 		Name:          "player5",
-	// 		Chips:         4800,
-	// 		TablePosition: 5,
-	// 		Status:        "Raise",
-	// 		CurrentBet:    200,
-	// 	},
-	// }
-
-	// return fakeGameState
-
 	syncMsg := &msgpb.GameState{
 		Players:        make([]*msgpb.PlayerState, 0),
 		PotSize:        int32(g.game.gs.pot.Size()),
@@ -530,10 +474,10 @@ func (g *GameEngine) GetGameState() *msgpb.GameState {
 		CurrentBet:     int32(g.game.gs.CurrentBet),
 		CurrentRound:   g.game.gs.CurrentRound,
 	}
+
 	// Add the community cards
-	for _, card := range g.game.gs.cc.GetCards() {
-		syncMsg.CommunityCards = append(syncMsg.CommunityCards, &msgpb.Card{Suit: msgpb.SuitType(card.Suit), Rank: msgpb.RankType(card.Value)})
-	}
+	syncMsg.CommunityCards = append(syncMsg.CommunityCards, g.game.gs.cc.GetCards()...)
+
 	// Add the players
 	for _, player := range g.playerMgr.players {
 		if player != nil {
@@ -556,12 +500,19 @@ func (g *GameEngine) GetGameState() *msgpb.GameState {
 		}
 		// Add the showing cards
 		for _, peer := range g.game.gs.FinalResult.ShowingCards {
+			if peer == nil {
+				continue
+			}
 			peerState := &msgpb.PeerState{
-				TablePos:    int32(peer.TablePos),
-				PlayerCards: make([]*msgpb.Card, 0),
+				TablePos:      int32(peer.TablePos),
+				PlayerCards:   make([]*msgpb.Card, 0),
+				HandRanking:   peer.GetPlayerHandRanking(),
+				EvaluatedHand: make([]*msgpb.Card, 0),
 			}
 			for _, card := range peer.PlayerCards {
-				peerState.PlayerCards = append(peerState.PlayerCards, &msgpb.Card{Suit: msgpb.SuitType(card.Suit), Rank: msgpb.RankType(card.Rank)})
+				if card != nil {
+					peerState.PlayerCards = append(peerState.PlayerCards, &msgpb.Card{Suit: msgpb.SuitType(card.Suit), Rank: msgpb.RankType(card.Rank)})
+				}
 			}
 			syncMsg.FinalResult.ShowingCards = append(syncMsg.FinalResult.ShowingCards, peerState)
 		}

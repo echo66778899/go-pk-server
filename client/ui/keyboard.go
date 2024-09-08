@@ -7,8 +7,7 @@ type KeyboardEventType int
 // Keyboard events
 const (
 	ENTER     KeyboardEventType = 0
-	REQCHIP   KeyboardEventType = 1
-	END       KeyboardEventType = 2
+	EXIT      KeyboardEventType = 2
 	LEFT      KeyboardEventType = 3
 	RIGHT     KeyboardEventType = 4
 	UP        KeyboardEventType = 5
@@ -18,8 +17,17 @@ const (
 	MENU1     KeyboardEventType = 9
 	MENU2     KeyboardEventType = 10
 	MENU3     KeyboardEventType = 11
-	NEXT      KeyboardEventType = 12
-	PAYBACK   KeyboardEventType = 13
+
+	START_GAME KeyboardEventType = 20
+	PAUSE_GAME KeyboardEventType = 21
+	LEAVE_GAME KeyboardEventType = 22
+	TAKE_BUYIN KeyboardEventType = 23
+	GIVE_BUYIN KeyboardEventType = 24
+
+	FOLD          KeyboardEventType = 30
+	CHECK_OR_CALL KeyboardEventType = 31
+	RAISE         KeyboardEventType = 32
+	ALL_IN        KeyboardEventType = 33
 )
 
 type KeyboardEvent struct {
@@ -63,15 +71,27 @@ func ListenToKeyboard(evChan chan KeyboardEvent) {
 			case termbox.KeyBackspace2:
 				evChan <- KeyboardEvent{EventType: BACKSPACE, Key: ev.Key}
 			case termbox.KeyEsc:
-				evChan <- KeyboardEvent{EventType: END, Key: ev.Key}
+				evChan <- KeyboardEvent{EventType: EXIT, Key: ev.Key}
 			default:
 				switch ev.Ch {
-				case 'r':
-					evChan <- KeyboardEvent{EventType: REQCHIP, Key: ev.Key}
+				case 's':
+					evChan <- KeyboardEvent{EventType: START_GAME, Key: ev.Key}
 				case 'p':
-					evChan <- KeyboardEvent{EventType: PAYBACK, Key: ev.Key}
-				case 'n':
-					evChan <- KeyboardEvent{EventType: NEXT, Key: ev.Key}
+					evChan <- KeyboardEvent{EventType: PAUSE_GAME, Key: ev.Key}
+				case 'l':
+					evChan <- KeyboardEvent{EventType: LEAVE_GAME, Key: ev.Key}
+				case 't':
+					evChan <- KeyboardEvent{EventType: TAKE_BUYIN, Key: ev.Key}
+				case 'g':
+					evChan <- KeyboardEvent{EventType: GIVE_BUYIN, Key: ev.Key}
+				case 'f':
+					evChan <- KeyboardEvent{EventType: FOLD, Key: ev.Key}
+				case 'c':
+					evChan <- KeyboardEvent{EventType: CHECK_OR_CALL, Key: ev.Key}
+				case 'r':
+					evChan <- KeyboardEvent{EventType: RAISE, Key: ev.Key}
+				case 'a':
+					evChan <- KeyboardEvent{EventType: ALL_IN, Key: ev.Key}
 				case '1':
 					evChan <- KeyboardEvent{EventType: MENU1, Key: ev.Key}
 				case '2':

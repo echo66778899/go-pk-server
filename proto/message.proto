@@ -29,18 +29,31 @@ enum SuitType {
     SPADES = 3;
 }
 
+enum HankRankingType {
+	HIGH_CARD       = 0;
+	ONE_PAIR        = 1;
+	TWO_PAIR        = 2;
+	THREE_OF_A_KIND = 3;
+	STRAIGHT        = 4;
+	FLUSH           = 5;
+	FULL_HOUSE      = 6;
+	FOUR_OF_A_KIND  = 7;
+	STRAIGH_FLUSH   = 8;
+	ROYAL_FLUSH     = 9;
+}
+
 enum PlayerStatusType {
-    NoStack = 0;   // Player is sat out and not playing
-    SatIn  = 1;    // Player is sat in and waiting for the game to start
-    Playing = 2;   // Player is playing
-    Wait4Act = 3;  // Player is waiting for user action in their turn
-    Fold  = 4;     // Player has folded
-    Check = 5;     // Player has checked
-    Call  = 6;     // Player has called
-    Raise = 7;     // Player has raised
-    AllIn = 8;     // Player has all in
-    LOSER = 9;     // Loser
-    WINNER= 10;    // Winner
+    Unplayable = 0;   // Player is unable to play the game
+    Spectating  = 1;  // Player is sat in but not playing
+    Playing = 2;      // Player is playing
+    Wait4Act = 3;     // Player is waiting for user action in their turn
+    Fold  = 4;        // Player has folded
+    Check = 5;        // Player has checked
+    Call  = 6;        // Player has called
+    Raise = 7;        // Player has raised
+    AllIn = 8;        // Player has all in
+    LOSER = 9;        // Loser
+    WINNER= 10;       // Winner
 }
 
 enum PlayerGameActionType {
@@ -69,8 +82,10 @@ message Card {
 // Message to each player
 message PeerState {
     int32 table_pos = 1;
-    repeated Card player_cards = 2; // Cards of each player in a game
     bool is_chain_man = 3;
+    repeated Card player_cards = 2;   // Cards of each player in a game
+    string hand_ranking = 4;          // Description for player hand ranking at the time, or showing time
+    repeated Card evaluated_hand = 5; // Bigest hand
 }
 
 // Message to represent a player
@@ -133,7 +148,9 @@ message GameSetting {
     int32 min_stack_size = 3;        // Minimun number of players' stack size
     int32 small_blind = 4;           // Small blind value
     int32 big_blind = 5;             // Big blind value
-    int32 time_per_turn = 7;         // Maximum time (in seconds) allowed for each player to take a turn
+    int32 time_per_turn = 7;         // Maximum time (in seconds) allowed for each player to take a turn.
+    bool auto_next_game = 8;         // Enable auto next game if all required conditions are met
+    int32 auto_next_time = 9;        // How many seconds to wait for next game
 }
 
 message PlayerBalance {

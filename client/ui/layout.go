@@ -41,7 +41,7 @@ const (
 
 // Balance info list position
 const (
-	BALANCE_INFO_X = 150
+	BALANCE_INFO_X = 135
 	BALANCE_INFO_Y = 2 + Y_AXIS_AJUSTMENT
 )
 
