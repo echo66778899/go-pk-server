@@ -143,7 +143,8 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 	}
 
 	// Draw the current bet amount > 0
-	if pp.CurBet > 0 || pp.CurBet < 0 {
+	if pp.CurBet > 0 || pp.CurBet < 0 ||
+		status == msgpb.PlayerStatusType_name[int32(msgpb.PlayerStatusType_WINNER)] {
 		if status == msgpb.PlayerStatusType_name[int32(msgpb.PlayerStatusType_WINNER)] {
 			// Draw plus sign
 			buf.SetCell(Cell{COLLAPSED, NewStyle(ColorLightGreen, ColorBlack, ModifierBold)},
