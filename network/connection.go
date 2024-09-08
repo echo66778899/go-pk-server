@@ -1,6 +1,7 @@
 package network
 
 import (
+	"crypto/tls"
 	msgpb "go-pk-server/gen"
 	mylog "go-pk-server/log"
 	"log"
@@ -46,7 +47,26 @@ func (cm *ConnectionManager) AddRoom(gId groupId, r *Room) {
 
 func (cm *ConnectionManager) StartServer(addr string) error {
 	http.HandleFunc("/ws", cm.serveWebSocket)
-	return http.ListenAndServe(addr, nil)
+
+	// Load the self-signed certificate and key
+	certFile := "assets/cert.pem"
+	keyFile := "assets/key.pem"
+
+	// Configure the HTTPS server to use TLS
+	server := &http.Server{
+		Addr: ":8088", // HTTPS port (you can use :443 for production)
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12, // Use TLS 1.2 or higher
+		},
+	}
+	log.Println("Starting WSS server on https://localhost:8088")
+
+	// Start the server with TLS using the self-signed certificate
+	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+	return nil
+	//return http.ListenAndServe(addr, nil)
 }
 
 // Function to handle WebSocket connections

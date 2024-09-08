@@ -2,8 +2,10 @@ package network
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"log"
+	"net/url"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -31,7 +33,16 @@ func NewAgent() *Agent {
 
 func (a *Agent) Connect() bool {
 	// Connect to the WebSocket server
-	ws, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/ws", nil)
+	u := url.URL{Scheme: "wss", Host: "localhost:8088", Path: "/ws"}
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true, // Use this only for testing purposes
+	}
+	dialer := websocket.Dialer{
+		TLSClientConfig: tlsConfig,
+	}
+
+	ws, _, err := dialer.Dial(u.String(), nil)
 	if err != nil {
 		log.Fatalf("Failed to connect to server: %v", err)
 		return false
