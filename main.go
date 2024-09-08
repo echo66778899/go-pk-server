@@ -5,11 +5,18 @@ import (
 	msgpb "go-pk-server/gen"
 	mylog "go-pk-server/log"
 	snetwork "go-pk-server/network"
+	"os"
 )
 
 func main() {
-	core.MyGame.StartEngine(true)
+	if len(os.Args) < 2 {
+		mylog.Fatal("Usage: go run main.go <host:port>")
+	}
 
+	// Get the first argument as address
+	address := os.Args[1]
+
+	core.MyGame.StartEngine(true)
 	mylog.Infof("Starting server on :%d", 8080)
 
 	room2222 := snetwork.NewRoom(2, "1", "Hai Phan")
@@ -28,7 +35,7 @@ func main() {
 	connections := snetwork.NewConnectionManager()
 	connections.AddRoom(2, room2222)
 
-	err := connections.StartServer(":8080")
+	err := connections.StartServer(address)
 	if err != nil {
 		mylog.Error("Failed to start server:", err)
 	}

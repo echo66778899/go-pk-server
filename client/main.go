@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	SKIP_LOGIN_ROOM    = true
-	AUTO_ENTER_REQUEST = true
+	SKIP_LOGIN_ROOM    = false
+	AUTO_ENTER_REQUEST = false
 	// pointsChan         = make(chan int)
 	keyboardEventsChan = make(chan ui.KeyboardEvent)
 )
@@ -127,15 +127,18 @@ func getRoomInfoInput(selection string) (playerName, room, passcode, sessId stri
 	}
 
 	// Enter the authentication details
-	fmt.Print("Enter your name    : ")
-	_, err := fmt.Scanln(&playerName)
+	fmt.Println("+-------------------------------------------+")
+	fmt.Println("|  Welcome to the Poker Game Client v1.0.0  |")
+	fmt.Println("+-------------------------------------------+")
+	fmt.Print("-> Enter your name (no space): ")
 
+	_, err := fmt.Scanln(&playerName)
 	if err != nil {
 		log.Println("Failed to read input:", err)
 		os.Exit(1)
 	}
 
-	fmt.Print("Enter room number  : ")
+	fmt.Print("-> Enter room number: ")
 	_, err = fmt.Scanln(&room)
 
 	if err != nil {
@@ -143,7 +146,7 @@ func getRoomInfoInput(selection string) (playerName, room, passcode, sessId stri
 		os.Exit(1)
 	}
 
-	fmt.Print("Enter your passcode: ")
+	fmt.Print("-> Enter room pass: ")
 	_, err = fmt.Scanln(&passcode)
 
 	if err != nil {
@@ -151,13 +154,13 @@ func getRoomInfoInput(selection string) (playerName, room, passcode, sessId stri
 		os.Exit(1)
 	}
 
-	fmt.Print("Enter your session : ")
-	_, err = fmt.Scanln(&sessId)
+	// fmt.Print("-> Enter your session : ")
+	// _, err = fmt.Scanln(&sessId)
 
-	if err != nil {
-		log.Println("Failed to read input:", err)
-		os.Exit(1)
-	}
+	// if err != nil {
+	// 	log.Println("Failed to read input:", err)
+	// 	os.Exit(1)
+	// }
 
 	return
 }
@@ -207,7 +210,7 @@ func buttonEnterEvtHandler(opt ...int) {
 	case ui.BNT_AllInButton:
 		agent.SendingMessage(factoryAction("allin"))
 	case ui.BNT_PauseGameButton:
-		agent.SendingMessage(factoryCtrlMessage("pause_game"))
+		//agent.SendingMessage(factoryCtrlMessage("pause_game"))
 	case ui.BNT_StartGameButton:
 		agent.SendingMessage(factoryCtrlMessage("start_game"))
 	case ui.BNT_LeaveGameButton:
@@ -243,7 +246,7 @@ func main() {
 
 	// The first argument (args[0]) is the program's name
 	log.Println("Program Name:", args[0])
-	profile := ""
+	dest, profile := "", ""
 	// Check if there are additional arguments
 	if len(args) > 1 {
 		log.Println("Arguments passed:")
@@ -252,14 +255,19 @@ func main() {
 			log.Printf("Arg %d: %s\n", i+1, arg)
 		}
 		// convert the argument to an integer
-		profile = args[1]
+		dest = args[1]
 	} else {
 		log.Println("No arguments were passed.")
 		SKIP_LOGIN_ROOM = false
 	}
 
+	if SKIP_LOGIN_ROOM {
+		profile = dest
+		dest = "localhost:8088"
+	}
+
 	// Connect to the server
-	if agent.Connect() {
+	if agent.Connect(dest) {
 		// Send a message to the server
 		n, r, p, s := getRoomInfoInput(profile)
 		ui.UI_MODEL_DATA.YourLoginUsernameID = n

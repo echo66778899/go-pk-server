@@ -244,6 +244,8 @@ func getRankValueShortForm(rank msgpb.RankType) string {
 		return "8"
 	case msgpb.RankType_NINE:
 		return "9"
+	case msgpb.RankType_TEN:
+		return "10"
 	default:
 		return rank.String()
 	}

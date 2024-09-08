@@ -31,9 +31,9 @@ func NewAgent() *Agent {
 	}
 }
 
-func (a *Agent) Connect() bool {
+func (a *Agent) Connect(dest string) bool {
 	// Connect to the WebSocket server
-	u := url.URL{Scheme: "wss", Host: "localhost:8088", Path: "/ws"}
+	u := url.URL{Scheme: "wss", Host: dest, Path: "/ws"}
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true, // Use this only for testing purposes

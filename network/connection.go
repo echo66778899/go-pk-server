@@ -54,19 +54,23 @@ func (cm *ConnectionManager) StartServer(addr string) error {
 
 	// Configure the HTTPS server to use TLS
 	server := &http.Server{
-		Addr: ":8088", // HTTPS port (you can use :443 for production)
+		Addr: ":8888", // HTTPS port (you can use :443 for production)
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12, // Use TLS 1.2 or higher
 		},
 	}
-	log.Println("Starting WSS server on https://localhost:8088")
+
+	if addr != "" {
+		server.Addr = addr
+	}
+
+	mylog.Infof("Starting WSS server on https://%s\n", server.Addr)
 
 	// Start the server with TLS using the self-signed certificate
 	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		mylog.Fatalf("Failed to start server: %v", err)
 	}
 	return nil
-	//return http.ListenAndServe(addr, nil)
 }
 
 // Function to handle WebSocket connections
