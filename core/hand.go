@@ -2,6 +2,7 @@ package engine
 
 import (
 	msgpb "go-pk-server/gen"
+	mylog "go-pk-server/log"
 	"strings"
 )
 
@@ -11,6 +12,7 @@ type Hand struct {
 	rank           msgpb.HankRankingType
 	bestHand       []*msgpb.Card
 	bestTiebreaker []msgpb.RankType
+	BestKicker     msgpb.RankType
 }
 
 func (h Hand) String() string {
@@ -30,6 +32,7 @@ func (h *Hand) Reset() {
 	h.rank = msgpb.HankRankingType(-1)
 	h.bestHand = []*msgpb.Card{}
 	h.bestTiebreaker = []msgpb.RankType{}
+	h.BestKicker = msgpb.RankType_UNSPECIFIED_RANK
 }
 
 func (h *Hand) Evaluate(cc *CommunityCards) (bestRank msgpb.HankRankingType) {
@@ -66,27 +69,29 @@ func (h *Hand) BestHandString() string {
 	return cardsString
 }
 
-func (h *Hand) GetPlayerHandRanking(kicker msgpb.RankType) string {
-	var kickerString string
-	if kicker > msgpb.RankType_UNSPECIFIED_RANK {
-		kickerString = " WITH " + kicker.String() + " KICKER"
+func (h *Hand) bestKickerString() (kickerString string) {
+	if h.BestKicker > msgpb.RankType_UNSPECIFIED_RANK {
+		kickerString = " WITH " + getRankValueShortForm(h.BestKicker) + " KICKER"
 	}
+	return
+}
 
+func (h *Hand) GetPlayerHandRanking() string {
 	rankString := strings.ReplaceAll(h.rank.String(), "_", " ")
 
 	switch h.rank {
 	case msgpb.HankRankingType_HIGH_CARD:
-		// Example: "HIGH CARD, ACE"
+		// Example: "HIGH CARD, ACE" or "HIGH CARD, ACE with 10 KICKER"
 		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0])
 	case msgpb.HankRankingType_ONE_PAIR:
 		// Example: "ONE PAIR, 3S"
-		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0]) + "S" + kickerString
+		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0]) + "S" + h.bestKickerString()
 	case msgpb.HankRankingType_TWO_PAIR:
 		// Example: "TWO PAIR, KINGS AND 3S"
-		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0]) + "S AND " + h.bestTiebreaker[1].String() + "S" + kickerString
+		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0]) + "S AND " + getRankValueShortForm(h.bestTiebreaker[1]) + "S" + h.bestKickerString()
 	case msgpb.HankRankingType_THREE_OF_A_KIND:
 		// Example: "THREE OF A KIND, 3S" , or "THREE OF A KIND, 3S WITH ACE KICKER"
-		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0]) + "S" + kickerString
+		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0]) + "S" + h.bestKickerString()
 	case msgpb.HankRankingType_STRAIGHT:
 		// Example: "TEN HIGH STRAIGHT"
 		return getRankValueShortForm(h.bestTiebreaker[0]) + " HIGH " + rankString
@@ -95,7 +100,7 @@ func (h *Hand) GetPlayerHandRanking(kicker msgpb.RankType) string {
 		return getRankValueShortForm(h.bestTiebreaker[0]) + " HIGH " + rankString + ", " + h.bestHand[0].Suit.String()
 	case msgpb.HankRankingType_FULL_HOUSE:
 		// Example: "FULL HOUSE OF KINGS, AND 3S"
-		return rankString + " OF " + getRankValueShortForm(h.bestTiebreaker[0]) + "S, AND " + h.bestTiebreaker[1].String() + "S"
+		return rankString + " OF " + getRankValueShortForm(h.bestTiebreaker[0]) + "S, AND " + getRankValueShortForm(h.bestTiebreaker[1]) + "S"
 	case msgpb.HankRankingType_FOUR_OF_A_KIND:
 		// Example: "FOUR OF A KIND OF QUEENS"
 		return rankString + " OF " + getRankValueShortForm(h.bestTiebreaker[0]) + "S"
@@ -123,5 +128,39 @@ func (h *Hand) Compare(otherHand *Hand) int {
 		return -1
 	}
 
-	return compareTiebreakers(h.bestTiebreaker, otherHand.bestTiebreaker)
+	careKickerFromIdx, ret := 0, 0
+
+	switch h.rank {
+	case msgpb.HankRankingType_HIGH_CARD:
+		careKickerFromIdx = 1
+	case msgpb.HankRankingType_ONE_PAIR:
+		careKickerFromIdx = 1
+	case msgpb.HankRankingType_TWO_PAIR:
+		careKickerFromIdx = 2
+	case msgpb.HankRankingType_THREE_OF_A_KIND:
+		careKickerFromIdx = 1
+	}
+
+	for i := range h.bestTiebreaker {
+		if h.bestTiebreaker[i] > otherHand.bestTiebreaker[i] {
+			if i >= careKickerFromIdx {
+				h.BestKicker = h.bestTiebreaker[i]
+			}
+			ret = 1
+			break
+		} else if h.bestTiebreaker[i] < otherHand.bestTiebreaker[i] {
+			if i >= careKickerFromIdx {
+				otherHand.BestKicker = h.bestTiebreaker[i]
+			}
+			ret = -1
+			break
+		}
+	}
+
+	// Log the tiebreakers
+	mylog.Warnf("Equal hand (%s): Compared tiebreakers: %+v ? %+v <=> [ %s | %s ]\n",
+		h.GetPlayerHandRanking(), h.bestTiebreaker, otherHand.bestTiebreaker,
+		h.BestKicker.String(), otherHand.BestKicker.String())
+
+	return ret
 }

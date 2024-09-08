@@ -617,16 +617,7 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 					p.Name(),
 					p.ShowHand().BestHandString(),
 					p.ShowHand().SortedDecendingRankValue(),
-					p.ShowHand().GetPlayerHandRanking(0))
-
-				// Add the player to the list of evaluated hands
-				allEveluateedHands = append(allEveluateedHands,
-					&msgpb.PeerState{
-						TablePos:      int32(p.Position()),
-						PlayerCards:   p.ShowHand().Cards(),
-						HandRanking:   p.ShowHand().GetPlayerHandRanking(0),
-						EvaluatedHand: p.ShowHand().BestHand(),
-					})
+					p.ShowHand().GetPlayerHandRanking())
 			}
 		}
 
@@ -660,27 +651,21 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 					if p.ShowHand().Compare(winners[0].ShowHand()) > 0 {
 						// New winner, clear the list of winners
 						winners = []Player{p}
+						// Log the new winner with the hand
+						mylog.Infof("Player [%s] wins compare with a hand >> [ %s ]\n",
+							p.Name(), p.ShowHand().GetPlayerHandRanking())
 					} else if p.ShowHand().Compare(winners[0].ShowHand()) == 0 {
-						// Log the tiebreakers
-						mylog.Debugf("Same ranking!! Compare tiebreakers newP=%+v preWinner=%+v\n",
-							p.ShowHand().SortedDecendingRankValue(), winners[0].ShowHand().SortedDecendingRankValue())
+						// Add the player to the list of winners
+						winners = append(winners, p)
 						// Compare the kicker
-						if r := compareTiebreakers(p.ShowHand().SortedDecendingRankValue(),
-							winners[0].ShowHand().SortedDecendingRankValue()); r > 0 {
-							mylog.Debugf("New player [%s] > Previous winner [%s]\n", p.Name(), winners[0].Name())
-							// set new winner
-							winners = []Player{p}
-						} else if r == 0 {
-							mylog.Debugf("Player [%s] and player [%s] equal hand ranking and tiebreaks [%s==%s]\n",
-								p.Name(), winners[0].Name(),
-								p.ShowHand().GetPlayerHandRanking(0), winners[0].ShowHand().GetPlayerHandRanking(0))
-							// Add the player to the list of winners
-							winners = append(winners, p)
-						} else {
-							// Log this edge case
-							mylog.Debugf("Pre winner [%s] still wins when comparing tiebreakers", winners[0].Name())
-						}
+						mylog.Debugf("Player [%s] and player [%s] equal hand ranking and tiebreaks [ %s == %s ]\n",
+							p.Name(), winners[0].Name(),
+							p.ShowHand().GetPlayerHandRanking(), winners[0].ShowHand().GetPlayerHandRanking())
+					} else {
+						// Log this edge case
+						mylog.Debugf("Pre winner [%s] still wins the tiebreakers", winners[0].Name())
 					}
+
 				}
 			}
 
@@ -707,12 +692,20 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 				if p.ChipChange() >= 0 {
 					p.UpdateStatus(msgpb.PlayerStatusType_WINNER)
 					mylog.Infof("Player %s WIN the pot (+%d) with a hand >> [ %s ]\n",
-						p.Name(), p.ChipChange(), p.ShowHand().GetPlayerHandRanking(0))
+						p.Name(), p.ChipChange(), p.ShowHand().GetPlayerHandRanking())
 				} else {
 					p.UpdateStatus(msgpb.PlayerStatusType_LOSER)
 					mylog.Warnf("Player %s LOSE the pot (%d) with a hand >> [ %s ]\n",
-						p.Name(), p.ChipChange(), p.ShowHand().GetPlayerHandRanking(0))
+						p.Name(), p.ChipChange(), p.ShowHand().GetPlayerHandRanking())
 				}
+				// Add the player to the list of evaluated hands
+				allEveluateedHands = append(allEveluateedHands,
+					&msgpb.PeerState{
+						TablePos:      int32(p.Position()),
+						PlayerCards:   p.ShowHand().Cards(),
+						HandRanking:   p.ShowHand().GetPlayerHandRanking(),
+						EvaluatedHand: p.ShowHand().BestHand(),
+					})
 			}
 		}
 
@@ -721,6 +714,10 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 			ShowingCards: allEveluateedHands,
 		}
 	}
+	// Require reset the pot after the pot is distributed
+	g.gs.pot.ResetPot()
+
+	// Auto create the next game input after X setting seconds
 	if g.setting.AutoNextGame {
 		g.auto.CreatGameInputAfter(GameEnded, time.Duration(g.setting.AutoNextTime)*time.Second)
 	}

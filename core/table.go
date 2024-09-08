@@ -212,6 +212,7 @@ func (tm *TableManager) CheckAndUpdatePlayerReadiness(minStack int) bool {
 				return false
 			} else {
 				p.UpdateStatus(msgpb.PlayerStatusType_Playing)
+				p.UpdateCurrentBet(0)
 			}
 		}
 	}

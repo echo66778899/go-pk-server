@@ -43,7 +43,7 @@ func (t *Text) Draw(buf *Buffer) {
 
 	cells := ParseStyles(t.Text, t.TextStyle)
 	if t.WrapText {
-		cells = WrapCells(cells, uint(t.Dx()))
+		cells = WrapCells(cells, uint(t.Dx()-2))
 	}
 
 	rows := SplitCells(cells, '\n')

@@ -91,6 +91,7 @@ func handleGameState(gs *msgpb.GameState) {
 	case msgpb.RoundStateType_SHOWDOWN:
 		ui.UI_MODEL_DATA.IsDealerVisible = false
 		ui.UI_MODEL_DATA.Result = gs.FinalResult
+		ui.UI_MODEL_DATA.Pot = int(gs.PotSize)
 	default:
 		ui.UI_MODEL_DATA.IsDealerVisible = true
 		ui.UI_MODEL_DATA.Pot = int(gs.PotSize)
