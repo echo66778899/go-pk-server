@@ -613,9 +613,10 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 				p.ShowHand().Evaluate(&g.gs.cc)
 
 				// Print its rank
-				mylog.Debugf("Player %s's best hand: [%s] >> (%s)\n",
+				mylog.Debugf("Player %s's best hand: [%s] >> tiebreaker: %+v >> (%s)\n",
 					p.Name(),
 					p.ShowHand().BestHandString(),
+					p.ShowHand().SortedDecendingRankValue(),
 					p.ShowHand().GetPlayerHandRanking(0))
 
 				// Add the player to the list of evaluated hands
@@ -661,7 +662,7 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 						winners = []Player{p}
 					} else if p.ShowHand().Compare(winners[0].ShowHand()) == 0 {
 						// Log the tiebreakers
-						mylog.Debugf("Same ranking!! Compare tiebreakers newP=%v preWinner=%v\n",
+						mylog.Debugf("Same ranking!! Compare tiebreakers newP=%+v preWinner=%+v\n",
 							p.ShowHand().SortedDecendingRankValue(), winners[0].ShowHand().SortedDecendingRankValue())
 						// Compare the kicker
 						if r := compareTiebreakers(p.ShowHand().SortedDecendingRankValue(),
@@ -705,11 +706,11 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 			if p != nil && p.Status() != msgpb.PlayerStatusType_Fold {
 				if p.ChipChange() >= 0 {
 					p.UpdateStatus(msgpb.PlayerStatusType_WINNER)
-					mylog.Infof("Player %s wins the pot (+%d) with a hand [[%s]]\n",
+					mylog.Infof("Player %s WIN the pot (+%d) with a hand >> [ %s ]\n",
 						p.Name(), p.ChipChange(), p.ShowHand().GetPlayerHandRanking(0))
 				} else {
 					p.UpdateStatus(msgpb.PlayerStatusType_LOSER)
-					mylog.Warnf("Player %s loses the pot (%d) with a hand [[%s]]\n",
+					mylog.Warnf("Player %s LOSE the pot (%d) with a hand >> [ %s ]\n",
 						p.Name(), p.ChipChange(), p.ShowHand().GetPlayerHandRanking(0))
 				}
 			}

@@ -225,3 +225,26 @@ func getWinnersName(winners []Player) string {
 	// Join the names with ", "
 	return strings.Join(names, ", ")
 }
+
+func getRankValueShortForm(rank msgpb.RankType) string {
+	switch rank {
+	case msgpb.RankType_DEUCE:
+		return "2"
+	case msgpb.RankType_THREE:
+		return "3"
+	case msgpb.RankType_FOUR:
+		return "4"
+	case msgpb.RankType_FIVE:
+		return "5"
+	case msgpb.RankType_SIX:
+		return "6"
+	case msgpb.RankType_SEVEN:
+		return "7"
+	case msgpb.RankType_EIGHT:
+		return "8"
+	case msgpb.RankType_NINE:
+		return "9"
+	default:
+		return rank.String()
+	}
+}

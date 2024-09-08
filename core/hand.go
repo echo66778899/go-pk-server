@@ -77,31 +77,31 @@ func (h *Hand) GetPlayerHandRanking(kicker msgpb.RankType) string {
 	switch h.rank {
 	case msgpb.HankRankingType_HIGH_CARD:
 		// Example: "HIGH CARD, ACE"
-		return rankString + ", " + h.bestTiebreaker[0].String()
+		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0])
 	case msgpb.HankRankingType_ONE_PAIR:
 		// Example: "ONE PAIR, 3S"
-		return rankString + ", " + h.bestTiebreaker[0].String() + "S" + kickerString
+		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0]) + "S" + kickerString
 	case msgpb.HankRankingType_TWO_PAIR:
 		// Example: "TWO PAIR, KINGS AND 3S"
-		return rankString + ", " + h.bestTiebreaker[0].String() + "S AND " + h.bestTiebreaker[1].String() + "S" + kickerString
+		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0]) + "S AND " + h.bestTiebreaker[1].String() + "S" + kickerString
 	case msgpb.HankRankingType_THREE_OF_A_KIND:
 		// Example: "THREE OF A KIND, 3S" , or "THREE OF A KIND, 3S WITH ACE KICKER"
-		return rankString + ", " + h.bestTiebreaker[0].String() + "S" + kickerString
+		return rankString + ", " + getRankValueShortForm(h.bestTiebreaker[0]) + "S" + kickerString
 	case msgpb.HankRankingType_STRAIGHT:
 		// Example: "TEN HIGH STRAIGHT"
-		return h.bestTiebreaker[0].String() + " HIGH " + rankString
+		return getRankValueShortForm(h.bestTiebreaker[0]) + " HIGH " + rankString
 	case msgpb.HankRankingType_FLUSH:
 		// Example: "KING HIGH FLUSH, SPADES"
-		return h.bestTiebreaker[0].String() + " HIGH " + rankString + ", " + h.bestHand[0].Suit.String()
+		return getRankValueShortForm(h.bestTiebreaker[0]) + " HIGH " + rankString + ", " + h.bestHand[0].Suit.String()
 	case msgpb.HankRankingType_FULL_HOUSE:
 		// Example: "FULL HOUSE OF KINGS, AND 3S"
-		return rankString + " OF " + h.bestTiebreaker[0].String() + "S, AND " + h.bestTiebreaker[1].String() + "S"
+		return rankString + " OF " + getRankValueShortForm(h.bestTiebreaker[0]) + "S, AND " + h.bestTiebreaker[1].String() + "S"
 	case msgpb.HankRankingType_FOUR_OF_A_KIND:
 		// Example: "FOUR OF A KIND OF QUEENS"
-		return rankString + " OF " + h.bestTiebreaker[0].String() + "S"
+		return rankString + " OF " + getRankValueShortForm(h.bestTiebreaker[0]) + "S"
 	case msgpb.HankRankingType_STRAIGH_FLUSH:
 		// Example: "8 HIGH STRAIGHT FLUSH, DIAMONDS"
-		return h.bestTiebreaker[0].String() + " HIGH " + rankString + ", " + h.bestHand[0].Suit.String()
+		return getRankValueShortForm(h.bestTiebreaker[0]) + " HIGH " + rankString + ", " + h.bestHand[0].Suit.String()
 	case msgpb.HankRankingType_ROYAL_FLUSH:
 		// Example: "ROYAL FLUSH, SPADES"
 		return rankString + ", " + h.bestHand[0].Suit.String()

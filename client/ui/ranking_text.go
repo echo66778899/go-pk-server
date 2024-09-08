@@ -117,7 +117,7 @@ func (rt *RankingText) UpdateTextsBasedPlayers() {
 		rt.HandRankingTexts[i].TextStyle = Theme.Paragraph.Text
 		rt.HandRankingTexts[i].WrapText = true
 		// Init layout position
-		rt.HandRankingTexts[i].SetRect(refLayout[i].X, refLayout[i].Y-2, refLayout[i].X+35, refLayout[i].Y)
+		rt.HandRankingTexts[i].SetRect(refLayout[i].X, refLayout[i].Y-2, refLayout[i].X+30, refLayout[i].Y)
 	}
 }
 
