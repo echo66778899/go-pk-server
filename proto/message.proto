@@ -54,6 +54,8 @@ enum PlayerStatusType {
     AllIn = 8;        // Player has all in
     LOSER = 9;        // Loser
     WINNER= 10;       // Winner
+    SB = 11;   // Small blind
+    BB = 12;   // Big blind
 }
 
 enum PlayerGameActionType {
@@ -110,7 +112,7 @@ message Result {
 message GameState {
     repeated PlayerState players = 1;       // State of players
     int32 pot_size = 2;                     // Current size of the pot
-    int32 dealer_id = 3;                    // ID of the current dealer/button
+    int32 dealer_id = 3;                    // Position of the current dealer/button
     repeated Card community_cards = 4;      // Cards on the table in this round
     int32 current_bet = 5;                  // Current bet amount
     RoundStateType current_round = 6;       // Type of the current round
@@ -119,7 +121,7 @@ message GameState {
 
 // Message to represent a player's action
 message PlayerAction {
-    string player_id = 1;       // ID of the player taking action
+    string player_id = 1;       // Position of the player taking action
     string action_type = 2;     // Type of action (e.g., "fold", "check", "call", "raise", "all_in")
     int32 raise_amount = 3;     // If the action is a raise, the amount raised
 }

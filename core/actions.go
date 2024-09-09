@@ -5,7 +5,7 @@ import msgpb "go-pk-server/gen"
 // Action represents a player's action in a Poker game.
 type ActionIf interface {
 	// For game engine
-	FromWho() int
+	AtPosition() int
 	WhatAction() msgpb.PlayerGameActionType
 	HowMuch() int
 }
@@ -25,7 +25,7 @@ func NewPlayerAction(position int, actionType msgpb.PlayerGameActionType, amount
 	}
 }
 
-func (pa *PlayerAction) FromWho() int {
+func (pa *PlayerAction) AtPosition() int {
 	return pa.PlayerPosition
 }
 

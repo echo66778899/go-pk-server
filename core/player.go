@@ -12,30 +12,34 @@ type Agent interface {
 }
 
 type Player interface {
-	// For game engine
+	// For game control
 	UpdatePosition(int)
 	DealCard(*msgpb.Card, int)
-	HasNewCards() bool
+	HasPocketCards() bool
+	DropPocketCards()
 	UpdateCurrentBet(int)
 	UpdateStatus(msgpb.PlayerStatusType)
-	AddWonChips(int)
 	GetChipForBet(int)
+	AddWonChips(int)
 	TakeChips(int)
 	AddChips(int)
 	UpdateInvalidAction([]msgpb.PlayerGameActionType)
-	ResetForNewRound()
-	ResetForNewGame()
+	PrepareForNewRound()
+	PrepareNewGame()
 	ResetPlayerState()
+	IsSpectating() bool
+
 	// Tracking player state
 	Position() int
+	IsDealer() bool
 	CurrentBet() int
 	ShowHand() *Hand
 	Status() msgpb.PlayerStatusType
-	ID() uint64
+	RoomID() uint64
 	Name() string
 	Chips() int
 	ChipChange() int
-	UnsupportActs() []msgpb.PlayerGameActionType
+	UnsupportAction() []msgpb.PlayerGameActionType
 
 	// Notifies the player of the game state
 	NotifyPlayerIfNewHand()
@@ -47,17 +51,22 @@ type OnlinePlayer struct {
 	gid       uint64
 	connAgent Agent
 
-	// Player state
+	// Player option control
+	isSpectating bool
+
+	// Player game state
 	position int // slot no
 	chips    int
-	status   msgpb.PlayerStatusType
-	// Round state
+
+	// All rounds state
+	isDealer         bool
 	hand             Hand
 	chipChangeAmount int // chips won or lost in the current round
-	currentBet       int
-	isNewCard        bool
-	// Invalid actions for the player
-	invalidAction []msgpb.PlayerGameActionType
+	// Eeach round state
+	currentBet int
+	invalidPGA []msgpb.PlayerGameActionType
+	// player status
+	status msgpb.PlayerStatusType
 }
 
 // NewOnlinePlayer creates a new online player.
@@ -78,17 +87,15 @@ func (p *OnlinePlayer) UpdatePosition(position int) {
 // Implement the Player interface
 func (p *OnlinePlayer) DealCard(card *msgpb.Card, idx int) {
 	p.hand.SetCard(card, idx)
-	if idx == 1 {
-		p.isNewCard = true
-	}
 }
 
-// HasNewCards returns true if the player has new cards. Otherwise, it returns false.
-// It also resets the isNewCard flag to false.
-func (p *OnlinePlayer) HasNewCards() bool {
-	ret := p.isNewCard
-	p.isNewCard = false
-	return ret
+// HasPocketCards returns true if the player has new cards.
+func (p *OnlinePlayer) HasPocketCards() bool {
+	return p.hand.HasCards()
+}
+
+func (p *OnlinePlayer) DropPocketCards() {
+	p.hand.Reset()
 }
 
 func (p *OnlinePlayer) UpdateCurrentBet(bet int) {
@@ -137,29 +144,43 @@ func (p *OnlinePlayer) AddChips(amount int) {
 }
 
 func (p *OnlinePlayer) UpdateInvalidAction(invalidActions []msgpb.PlayerGameActionType) {
-	p.invalidAction = invalidActions
+	p.invalidPGA = invalidActions
 }
 
-func (p *OnlinePlayer) ResetForNewRound() {
-	if (p.status != msgpb.PlayerStatusType_Fold) && (p.status != msgpb.PlayerStatusType_AllIn) {
-		mylog.Debugf("Player %s is reset for new round\n", p.name)
-		p.status = msgpb.PlayerStatusType_Playing
-	}
+func (p *OnlinePlayer) PrepareForNewRound() {
+	// each round state
 	p.currentBet = 0
-	p.invalidAction = nil
+	p.invalidPGA = nil
+	// player status
+	previousStatus := p.status
+	switch p.status {
+	case msgpb.PlayerStatusType_Fold:
+		// Player is folded, reset the status to Spectating for new round
+		p.status = msgpb.PlayerStatusType_Spectating
+	case msgpb.PlayerStatusType_Wait4Act,
+		msgpb.PlayerStatusType_Check,
+		msgpb.PlayerStatusType_Call,
+		msgpb.PlayerStatusType_Raise:
+		// Player is playing, reset the status to Playing for new round
+		p.status = msgpb.PlayerStatusType_Playing
+	case msgpb.PlayerStatusType_AllIn:
+		// Player is all-in, Let they show status
+	}
+	mylog.Debugf("Player %s has status %s, reset to %s for new round\n",
+		p.name, previousStatus, p.status)
 }
 
-func (p *OnlinePlayer) ResetForNewGame() {
+func (p *OnlinePlayer) PrepareNewGame() {
 	// Print player name
-	mylog.Debugf("Player %s is reset for new game\n", p.name)
-	// round state
+	mylog.Debugf("Player [%s] state is reset for new game\n", p.name)
+	// all round state
+	p.isDealer = false
 	p.hand.Reset()
 	p.chipChangeAmount = 0
+	// each round state
 	p.currentBet = 0
-	p.isNewCard = false
-	// invalid actions for ui
-	p.invalidAction = nil
-
+	p.invalidPGA = nil
+	// player status
 	if (p.status != msgpb.PlayerStatusType_Unplayable) &&
 		(p.status != msgpb.PlayerStatusType_Spectating) {
 		mylog.Debugf("Player %s's status is reset from %s to %s for new game\n",
@@ -178,8 +199,16 @@ func (p *OnlinePlayer) ResetPlayerState() {
 	p.status = msgpb.PlayerStatusType_Unplayable
 }
 
+func (p *OnlinePlayer) IsSpectating() bool {
+	return p.isSpectating
+}
+
 func (p *OnlinePlayer) Position() int {
 	return p.position
+}
+
+func (p *OnlinePlayer) IsDealer() bool {
+	return p.isDealer
 }
 
 func (p *OnlinePlayer) CurrentBet() int {
@@ -194,7 +223,7 @@ func (p *OnlinePlayer) Status() msgpb.PlayerStatusType {
 	return p.status
 }
 
-func (p *OnlinePlayer) ID() uint64 {
+func (p *OnlinePlayer) RoomID() uint64 {
 	return p.gid
 }
 
@@ -206,8 +235,8 @@ func (p *OnlinePlayer) Chips() int {
 	return p.chips
 }
 
-func (p *OnlinePlayer) UnsupportActs() []msgpb.PlayerGameActionType {
-	return p.invalidAction
+func (p *OnlinePlayer) UnsupportAction() []msgpb.PlayerGameActionType {
+	return p.invalidPGA
 }
 
 func (p *OnlinePlayer) NotifyPlayerIfNewHand() {
@@ -235,40 +264,3 @@ func (p *OnlinePlayer) NewReAct(ActionType msgpb.PlayerGameActionType, Amount in
 		Amount:         Amount,
 	}
 }
-
-// func (p *OnlinePlayer) RandomSuggestionAction() PlayerAction {
-// // check if nil list
-// if len(p.suggestAction) == 0 || p.chips == 0 || p.status == msgpb.PlayerStatusType_Fold || p.status != msgpb.PlayerStatusType_Wait4Act {
-// 	return PlayerAction{
-// 		PlayerPosition: p.position,
-// 		ActionType:     Unknown,
-// 	}
-// }
-// // Log random suggestion action from the list
-// len := len(p.suggestAction)
-// fmt.Printf("Player %s's suggested %d actions: %v\n", p.name, len, p.suggestAction)
-
-// // Randomly select an action from suggested actions list
-// index := rand.Intn(len - 1)
-// action := p.suggestAction[index]
-
-// if action == Raise {
-// 	// Randomly select a raise amount between big blind and max chips
-// 	raiseAmount := rand.Intn(p.chips / 2)
-// 	// mod by 20
-// 	raiseAmount = raiseAmount - (raiseAmount % 20)
-// 	if raiseAmount < 20 {
-// 		raiseAmount = 20
-// 	}
-// 	return PlayerAction{
-// 		PlayerPosition: p.position,
-// 		ActionType:     action,
-// 		Amount:         raiseAmount,
-// 	}
-// }
-
-// return PlayerAction{
-// 	PlayerPosition: p.position,
-// 	ActionType:     action,
-// }
-// }

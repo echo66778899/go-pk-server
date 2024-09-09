@@ -15,10 +15,10 @@ type GameState struct {
 	cc  CommunityCards
 
 	// Table states
-	ButtonPosition   int // slot number of the player who is the dealer
-	CurrentRound     msgpb.RoundStateType
-	CurrentBet       int
-	NumPlayingPlayer int
+	ButtonPosition    int // slot number of the player who is the dealer
+	CurrentRound      msgpb.RoundStateType
+	CurrentBet        int
+	readyPlayersCount int
 
 	// Result states
 	FinalResult *msgpb.Result

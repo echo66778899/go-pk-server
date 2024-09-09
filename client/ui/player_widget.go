@@ -12,17 +12,19 @@ type PlayerPanel struct {
 	player *msgpb.PlayerState
 	ppInfo *msgpb.PeerState
 
-	InfoTextStyle Style
-	CurBetStyle   Style
-	Slot          int
-	CurBet        int
+	PlayerChipStyle Style
+	StatusTextStyle Style
+	CurBetStyle     Style
+	Slot            int
+	CurBet          int
 }
 
 func NewPlayerPanel() *PlayerPanel {
 	return &PlayerPanel{
-		Block:         *NewBlock(),
-		InfoTextStyle: NewStyle(ColorWhite, ColorBlack, ModifierBold),
-		CurBetStyle:   NewStyle(ColorWhite, ColorBlack, ModifierBold),
+		Block:           *NewBlock(),
+		PlayerChipStyle: NewStyle(ColorWhite, ColorBlack, ModifierBold),
+		StatusTextStyle: NewStyle(ColorWhite, ColorBlack, ModifierBold),
+		CurBetStyle:     NewStyle(ColorWhite, ColorBlack, ModifierBold),
 	}
 }
 
@@ -51,7 +53,10 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 		return
 	}
 
+	// dipslay info of the player
+	chipsValue := int(pp.player.Chips)
 	status := ""
+
 	if pp.player != nil {
 		playerName := pp.player.Name
 		// Add space to title to center it
@@ -64,45 +69,53 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 		case msgpb.PlayerStatusType_Wait4Act:
 			pp.TitleStyle = NewStyle(ColorGreen, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorGreen, ColorBlack, ModifierBold)
-			pp.InfoTextStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.StatusTextStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.PlayerChipStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			pp.CurBetStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			status = ""
-		case msgpb.PlayerStatusType_Fold:
+		case msgpb.PlayerStatusType_Fold, msgpb.PlayerStatusType_Spectating:
 			pp.TitleStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
-			pp.InfoTextStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
+			pp.PlayerChipStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
+			pp.StatusTextStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 			status = msgpb.PlayerStatusType_name[int32(msgpb.PlayerStatusType_Fold)]
 			pp.CurBet = 0
 		case msgpb.PlayerStatusType_Playing:
 			pp.TitleStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
-			pp.InfoTextStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.PlayerChipStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.StatusTextStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			pp.CurBetStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			status = "--||--"
 		case msgpb.PlayerStatusType_Unplayable:
 			pp.TitleStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorDarkGray, ColorBlack, ModifierBold)
-			pp.InfoTextStyle = NewStyle(ColorBlack, ColorBlack, ModifierBold)
+			pp.PlayerChipStyle = NewStyle(ColorRed, ColorBlack, ModifierBold)
+			pp.StatusTextStyle = NewStyle(ColorBlack, ColorBlack, ModifierBold)
 			status = msgpb.PlayerStatusType_name[int32(pp.player.Status)]
 			pp.CurBet = 0
 		case msgpb.PlayerStatusType_LOSER:
 			pp.TitleStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
-			pp.InfoTextStyle = NewStyle(ColorLightRed, ColorBlack, ModifierBold)
+			pp.PlayerChipStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.StatusTextStyle = NewStyle(ColorLightRed, ColorBlack, ModifierBold)
 			pp.CurBetStyle = NewStyle(ColorLightRed, ColorBlack, ModifierBold)
 			status = msgpb.PlayerStatusType_name[int32(pp.player.Status)]
 			pp.CurBet = int(pp.player.ChangeAmount) * -1
 		case msgpb.PlayerStatusType_WINNER:
 			pp.TitleStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
-			pp.InfoTextStyle = NewStyle(ColorLightGreen, ColorBlack, ModifierBold)
+			pp.PlayerChipStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.StatusTextStyle = NewStyle(ColorLightGreen, ColorBlack, ModifierBold)
 			pp.CurBetStyle = NewStyle(ColorLightGreen, ColorBlack, ModifierBold)
 			status = msgpb.PlayerStatusType_name[int32(pp.player.Status)]
 			pp.CurBet = int(pp.player.ChangeAmount)
+			chipsValue -= int(pp.player.ChangeAmount)
 		default:
 			pp.TitleStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			pp.BorderStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
-			pp.InfoTextStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.PlayerChipStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
+			pp.StatusTextStyle = NewStyle(ColorLightYellow, ColorBlack, ModifierBold)
 			pp.CurBetStyle = NewStyle(ColorWhite, ColorBlack, ModifierBold)
 			status = msgpb.PlayerStatusType_name[int32(pp.player.Status)]
 		}
@@ -120,9 +133,9 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 	buf.Fill(Cell{HORIZONTAL_LINE, pp.BorderStyle}, image.Rect(pp.Inner.Min.X, pp.Inner.Min.Y+line1Offset, pp.Inner.Max.X, pp.Inner.Min.Y+line1Offset+1))
 
 	// Draw player chips
-	buf.SetCell(Cell{SHADED_BLOCKS[2], NewStyle(ColorGreen)}, image.Pt(pp.Inner.Min.X+3, pp.Inner.Min.Y+chipLine))
-	chips := fmt.Sprintf("%d", pp.player.Chips)
-	cells := ParseStyles(chips, pp.InfoTextStyle)
+	buf.SetCell(Cell{SHADED_BLOCKS[2], NewStyle(ColorWhite)}, image.Pt(pp.Inner.Min.X+3, pp.Inner.Min.Y+chipLine))
+	chips := fmt.Sprintf("%d\n", chipsValue)
+	cells := ParseStyles(chips, pp.PlayerChipStyle)
 	for x, cell := range cells {
 		if x+pp.Inner.Min.X+4 >= pp.Inner.Max.X {
 			break
@@ -131,7 +144,7 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 	}
 
 	// Draw player status
-	cells = ParseStyles(status, pp.InfoTextStyle)
+	cells = ParseStyles(status, pp.StatusTextStyle)
 	// Center the status text
 	statusLen := len(status)
 	xStart := (pp.Inner.Dx() - statusLen) / 2

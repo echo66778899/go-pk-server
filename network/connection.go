@@ -146,7 +146,6 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (c *Client, r 
 	}
 
 	if msgType != websocket.BinaryMessage {
-		conn.WriteMessage(websocket.TextMessage, []byte("Invalid message"))
 		mylog.Error("Invalid authen message type")
 		return
 	}
@@ -165,7 +164,6 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (c *Client, r 
 	jr, ok := message.GetMessage().(*msgpb.ClientMessage_JoinRoom)
 
 	if !ok {
-		conn.WriteMessage(websocket.TextMessage, []byte("Invalid message ClientMessage_JoinRoom"))
 		mylog.Error("Invalid message ClientMessage_JoinRoom")
 		return
 	}
@@ -176,7 +174,6 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (c *Client, r 
 	// convert room string to uint64
 	roomNo, err := strconv.ParseUint(roomStr, 10, 64)
 	if err != nil {
-		conn.WriteMessage(websocket.TextMessage, []byte("Invalid room"))
 		mylog.Errorf("Parsing invalid room number: %v", err.Error())
 	}
 
@@ -189,14 +186,12 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (c *Client, r 
 	// Find the room
 	room := cm.rooms[gId]
 	if room == nil {
-		conn.WriteMessage(websocket.TextMessage, []byte("Invalid room"))
 		mylog.Error("No existing room")
 		return
 	}
 
 	// Check if the passcode is correct
 	if room.CheckPasscode(passcode) == false {
-		conn.WriteMessage(websocket.TextMessage, []byte("Invalid passcode"))
 		mylog.Error("Invalid passcode")
 		return
 	}
@@ -209,7 +204,6 @@ func (cm *ConnectionManager) ProcessCheckin(conn *websocket.Conn) (c *Client, r 
 			room.UpdateConnection(nameId, conn)
 			panic("Not expected updated connection")
 		} else {
-			conn.WriteMessage(websocket.TextMessage, []byte("Username exists"))
 			mylog.Error("Username exists")
 			return
 		}

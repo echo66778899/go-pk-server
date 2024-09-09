@@ -9,6 +9,26 @@ import (
 	"time"
 )
 
+// Interface to manage the table
+type TableManager interface {
+	GetMaxSlot() int
+	UpdateMaxSeat(int)
+	CountSeatedPlayers() int
+	CountPlayablePlayers() int
+	CheckPlayersReadiness(*msgpb.GameSetting) bool
+	DetermineNextButtonPosition(int) int
+	GetSmallBlindPosition() int
+	GetBigBlindPosition() int
+	DealCardsToPlayers(*Deck)
+	FindNextPlayablePlayer(int, map[msgpb.PlayerStatusType]bool) (Player, bool)
+	PrepareForNewRound()
+	PrepareNewGame()
+	GetPlayerAtPosition(int) (Player, bool)
+	FindLastStayingPlayer() (Player, bool)
+	UpdatePlayerStatusDueToCurrentBetIncrease(int)
+	DoAttachedFunctionToAllPlayers(func(Player))
+}
+
 type GameStatistcs struct {
 	TotalHandsPlayed int
 }
@@ -17,7 +37,7 @@ type Game struct {
 	GameStatistcs
 	setting *msgpb.GameSetting
 	gs      GameState
-	tm      *TableManager
+	tm      TableManager
 	deck    *Deck
 	auto    *AutoInputProducer
 
@@ -25,8 +45,8 @@ type Game struct {
 }
 
 // NewPokerGame creates a new PokerGame
-func NewGame(setting *msgpb.GameSetting, tm *TableManager, d *Deck, auto *AutoInputProducer, reqEState func(EngineState, string)) *Game {
-	tm.UpdateMaxNoOfSlot(int(setting.MaxPlayers))
+func NewGame(setting *msgpb.GameSetting, tm TableManager, d *Deck, auto *AutoInputProducer, reqEState func(EngineState, string)) *Game {
+	tm.UpdateMaxSeat(int(setting.MaxPlayers))
 	return &Game{
 		setting: setting,
 		gs: GameState{
@@ -41,8 +61,9 @@ func NewGame(setting *msgpb.GameSetting, tm *TableManager, d *Deck, auto *AutoIn
 }
 
 func (g *Game) Play() bool {
+	mylog.Infof("Play when current round is %s \n", g.gs.CurrentRound)
 	// Check if the number of players is valid
-	if g.tm.GetNumberOfPlayers() < 2 {
+	if g.tm.CountSeatedPlayers() < 2 {
 		// Log error when the number of players is less than 2
 		mylog.Error("Number of players is less than 2")
 		return false
@@ -56,10 +77,10 @@ func (g *Game) Play() bool {
 	}
 
 	// How many players are sitting in
-	mylog.Infof("Starting a NEW_GAME with %d players in the table", g.tm.GetNumberOfPlayers())
+	mylog.Infof("Starting a NEW_GAME with %d players in the table", g.tm.CountSeatedPlayers())
 	// How many players are playing
-	g.gs.NumPlayingPlayer = g.tm.GetNumberOfPlayingPlayers()
-	mylog.Infof("[New game] The number of playing players: %d\n", g.gs.NumPlayingPlayer)
+	g.gs.readyPlayersCount = g.tm.CountPlayablePlayers()
+	mylog.Infof("[New game] The number of playing players: %d\n", g.gs.readyPlayersCount)
 
 	// Start the first round
 	g.handleCurrentRoundIsOver()
@@ -68,6 +89,7 @@ func (g *Game) Play() bool {
 }
 
 func (g *Game) HandleEndGame() bool {
+	mylog.Infof("Handling end game when current round is %s \n", g.gs.CurrentRound)
 	// Check if the game is over
 	if g.gs.CurrentRound != msgpb.RoundStateType_SHOWDOWN {
 		// Log error when the game is not over
@@ -84,8 +106,8 @@ func (g *Game) HandleEndGame() bool {
 		return false
 	}
 
-	g.gs.NumPlayingPlayer = g.tm.GetNumberOfPlayingPlayers()
-	mylog.Infof("[Next game] The number of playing players: %d\n", g.gs.NumPlayingPlayer)
+	g.gs.readyPlayersCount = g.tm.CountPlayablePlayers()
+	mylog.Infof("[Next game] The number of playing players: %d\n", g.gs.readyPlayersCount)
 
 	g.handleCurrentRoundIsOver()
 	return true
@@ -93,45 +115,43 @@ func (g *Game) HandleEndGame() bool {
 
 // Call when the game can not be continued
 func (g *Game) ResetGame(updateDealer bool) {
+	mylog.Infof("Resetting the game when current round is %s \n", g.gs.CurrentRound)
+
 	// Check if the pot is empty
 	if g.gs.pot.Total() > 0 {
 		// Log warning the pot is not empty
 		mylog.Warnf("Pot is not empty: %d\n", g.gs.pot.Total())
 		// Return the chips to the players
-		number := g.tm.GetNumberOfPlayers()
-		for _, p := range g.tm.players {
-			if p != nil {
-				p.AddChips(g.gs.pot.Total() / number)
-				p.UpdateCurrentBet(0)
-			}
-		}
+		number := g.tm.CountSeatedPlayers()
+		g.tm.DoAttachedFunctionToAllPlayers(func(p Player) {
+			p.AddChips(g.gs.pot.Total() / number)
+			p.UpdateCurrentBet(0)
+		})
 	}
 
 	// Statistics
 	g.TotalHandsPlayed++
 
 	mylog.Info("Resetting the game")
-	g.tm.ResetForNewGame()
+	g.tm.PrepareNewGame()
 	g.gs.pot.ResetPot()
 	g.gs.cc.Reset()
 	g.gs.CurrentRound = msgpb.RoundStateType_INITIAL
 	g.gs.FinalResult = nil
 
-	// Update button position if any
-	if updateDealer {
-		g.updateDealerPostion(false)
-	}
 	g.funcReqEngineState(EngineState_WAIT_FOR_PLAYING, "Game was reset")
 }
 
 func (g *Game) HandleActions(action ActionIf) {
+	mylog.Infof("Handling action when current round is %s \n", g.gs.CurrentRound)
 	if action == nil {
 		return
 	}
 
 	// Check if the action is valid
-	player := g.tm.GetPlayer(action.FromWho())
-	if player == nil {
+	player, ok := g.tm.GetPlayerAtPosition(action.AtPosition())
+	if !ok {
+		mylog.Errorf("Action from a not found player (%d)\n", action.AtPosition())
 		return
 	}
 
@@ -149,8 +169,9 @@ func (g *Game) HandleActions(action ActionIf) {
 		// Execute fold action
 		player.UpdateStatus(msgpb.PlayerStatusType_Fold)
 		player.UpdateCurrentBet(0)
+		player.DropPocketCards()
 		// Decrease the number of playing players
-		g.gs.NumPlayingPlayer--
+		g.gs.readyPlayersCount--
 
 	case msgpb.PlayerGameActionType_CHECK:
 		// Execute check action
@@ -163,14 +184,8 @@ func (g *Game) HandleActions(action ActionIf) {
 			return
 		}
 	case msgpb.PlayerGameActionType_CALL:
-		// Execute call action
-		if g.gs.CurrentBet == 0 || player.CurrentBet() == g.gs.CurrentBet {
-			// Log warning the player should go all-in
-			mylog.Errorf("Player %s should Check rather than Call", player.Name())
-			return
-		}
-		// If the player chip is less than the current bet, the player is all-in
 		callChip := g.gs.CurrentBet - player.CurrentBet()
+		// If the player chip is less than the current bet, the player is all-in
 		if player.Chips() <= callChip {
 			player.UpdateCurrentBet(player.Chips() + player.CurrentBet())
 			player.GetChipForBet(player.Chips())
@@ -202,10 +217,8 @@ func (g *Game) HandleActions(action ActionIf) {
 			player.UpdateStatus(msgpb.PlayerStatusType_AllIn)
 		}
 		g.gs.CurrentBet = player.CurrentBet()
-		// Update all player status to msgpb.PlayerStatusType_Playing and NextPlayer to msgpb.PlayerStatusType_Wait4Act
-		for _, p := range g.tm.GetListOfOtherPlayers(action.FromWho(), msgpb.PlayerStatusType_Call, msgpb.PlayerStatusType_Raise, msgpb.PlayerStatusType_Check) {
-			p.UpdateStatus(msgpb.PlayerStatusType_Playing)
-		}
+		// Update all player status to msgpb.PlayerStatusType_Playing
+		g.tm.UpdatePlayerStatusDueToCurrentBetIncrease(player.Position())
 	case msgpb.PlayerGameActionType_ALLIN:
 		// Execute all-in action
 		allInAmount := player.Chips()
@@ -218,25 +231,27 @@ func (g *Game) HandleActions(action ActionIf) {
 			g.gs.CurrentBet = player.CurrentBet()
 		}
 
-		// Update all player status to msgpb.PlayerStatusType_Playing and NextPlayer to msgpb.PlayerStatusType_Wait4Act
-		for _, p := range g.tm.GetListOfOtherPlayers(action.FromWho(), msgpb.PlayerStatusType_Call, msgpb.PlayerStatusType_Raise, msgpb.PlayerStatusType_Check) {
-			p.UpdateStatus(msgpb.PlayerStatusType_Playing)
-		}
+		// Update all player status to msgpb.PlayerStatusType_Playing
+		g.tm.UpdatePlayerStatusDueToCurrentBetIncrease(player.Position())
 	default:
 		// Log invalid action
 		mylog.Errorf("Invalid player action: %s\n", action.WhatAction())
 		return
 	}
 
-	mylog.Debugf("AFTER Current bet: %d, Number of msgpb.PlayerStatusType_Playing: %d\n", g.gs.CurrentBet, g.gs.NumPlayingPlayer)
+	mylog.Debugf("AFTER Current bet: %d, Number of player in-game: (%d)\n", g.gs.CurrentBet, g.gs.readyPlayersCount)
 
-	if g.gs.NumPlayingPlayer <= 1 {
+	if g.gs.readyPlayersCount <= 1 {
 		// Log only 1
 		mylog.Infof("Only one last player in the game! Gane is going to be over")
 		g.gs.CurrentRound = msgpb.RoundStateType_SHOWDOWN
 		g.evaluateHandsAndUpdateResult()
 		return
-	} else if np := g.tm.NextPlayer(action.FromWho(), msgpb.PlayerStatusType_Playing); np != nil {
+	} else if np, _ := g.tm.FindNextPlayablePlayer(action.AtPosition(), map[msgpb.PlayerStatusType]bool{ // and first found to msgpb.PlayerStatusType_Wait4Act
+		msgpb.PlayerStatusType_Playing: true,
+		msgpb.PlayerStatusType_SB:      true,
+		msgpb.PlayerStatusType_BB:      true}); np != nil {
+		// Update the next player status
 		np.UpdateStatus(msgpb.PlayerStatusType_Wait4Act)
 		switch action.WhatAction() {
 		case msgpb.PlayerGameActionType_CHECK:
@@ -270,22 +285,25 @@ func (g *Game) HandleActions(action ActionIf) {
 
 func (g *Game) isPlayersReadyToPlay() (canPlay bool) {
 	// Check minimum chips and update player status regarding to the minimum stack size
-	canPlay = g.tm.CheckAndUpdatePlayerReadiness(int(g.setting.MinStackSize))
-
-	return canPlay
+	return g.tm.CheckPlayersReadiness(g.setting)
 }
 
 func (g *Game) prepareForIncomingGame() {
 	// Reset the game state for a new game
-	g.tm.ResetForNewGame()
+	g.tm.PrepareNewGame()
 
 	// Shuffle the deck
 	g.deck.Shuffle()
 	g.deck.CutTheCard()
 
 	// Choose the dealer position
-	g.updateDealerPostion(g.TotalHandsPlayed == 0)
-	mylog.Debugf("Game number [%d]. Who is the dealer? -> %s\n", g.TotalHandsPlayed, g.tm.GetPlayer(g.gs.ButtonPosition).Name())
+	g.gs.ButtonPosition = g.tm.DetermineNextButtonPosition(g.gs.ButtonPosition)
+	if g.gs.ButtonPosition >= 0 {
+		b, _ := g.tm.GetPlayerAtPosition(g.gs.ButtonPosition)
+		mylog.Debugf("Game number [%d]. Who is the dealer? -> %s\n", g.TotalHandsPlayed, b.Name())
+	} else {
+		panic("game logic: Can not determine the dealer position")
+	}
 
 	g.gs.pot.ResetPot()
 	g.gs.cc.Reset()
@@ -295,7 +313,7 @@ func (g *Game) prepareForIncomingGame() {
 
 func (g *Game) prepareForNewBettingRound() {
 	// Reset player state
-	g.tm.ResetForNewRound()
+	g.tm.PrepareForNewRound()
 	// Reset new round state
 	g.resetGameStateForNewRound()
 
@@ -307,38 +325,11 @@ func (g *Game) resetGameStateForNewRound() {
 	g.gs.CurrentBet = 0
 }
 
-func (g *Game) updateDealerPostion(firstGame bool) {
-	if firstGame {
-		// Select the first dealer, choose the player next to the last player
-		p := g.tm.NextPlayer(g.tm.GetMaxNoSlot()-1, msgpb.PlayerStatusType_Playing)
-		if p == nil {
-			// Log error when selecting the first dealer
-			mylog.Debug("error: Can not select the first dealer")
-			return
-		}
-		g.gs.ButtonPosition = p.Position()
-		mylog.Infof("Selecting the first dealer: %s\n", g.tm.GetPlayer(g.gs.ButtonPosition).Name())
-		return
-	}
-	np := g.tm.NextPlayer(g.gs.ButtonPosition, msgpb.PlayerStatusType_Playing)
-	if np == nil {
-		mylog.Warnf("Reset game when there is no player in game table\n")
-		g.gs.ButtonPosition = 0
-		return
-	}
-	nextButton := np.Position()
-	// Log dealer position
-	buttonName := "Noone"
-	if pButton := g.tm.GetPlayer(g.gs.ButtonPosition); pButton != nil {
-		buttonName = pButton.Name()
-	}
-	mylog.Infof("Moving dealer from player %v to player %v\n", buttonName, np.Name())
-	g.gs.ButtonPosition = nextButton
-}
-
 func (g *Game) takeBlinds() {
-	sbPlayer := g.tm.NextPlayer(g.gs.ButtonPosition, msgpb.PlayerStatusType_Playing)
-	bbPlayer := g.tm.NextPlayer(sbPlayer.Position(), msgpb.PlayerStatusType_Playing)
+	sbPlayer, _ := g.tm.FindNextPlayablePlayer(g.gs.ButtonPosition,
+		map[msgpb.PlayerStatusType]bool{msgpb.PlayerStatusType_SB: true})
+	bbPlayer, _ := g.tm.FindNextPlayablePlayer(g.gs.ButtonPosition,
+		map[msgpb.PlayerStatusType]bool{msgpb.PlayerStatusType_BB: true})
 
 	if sbPlayer == nil || bbPlayer == nil {
 		// Log error when taking blinds
@@ -364,30 +355,13 @@ func (g *Game) takeBlinds() {
 	mylog.Infof("Big blind %s takes %d chips\n", bbPlayer.Name(), int(g.setting.BigBlind))
 
 	// Update the next active player
-	np := g.tm.NextPlayer(bbPlayer.Position(), msgpb.PlayerStatusType_Playing)
-	np.UpdateStatus(msgpb.PlayerStatusType_Wait4Act)
-	np.UpdateInvalidAction([]msgpb.PlayerGameActionType{msgpb.PlayerGameActionType_CHECK})
+	np, ok := g.tm.FindNextPlayablePlayer(bbPlayer.Position(),
+		map[msgpb.PlayerStatusType]bool{msgpb.PlayerStatusType_Playing: true})
+	if ok {
+		np.UpdateStatus(msgpb.PlayerStatusType_Wait4Act)
+		np.UpdateInvalidAction([]msgpb.PlayerGameActionType{msgpb.PlayerGameActionType_CHECK})
+	}
 	// np.UpdateSuggestions([]msgpb.PlayerGameActionType{Fold, Call, Raise, AllIn})
-}
-
-func (g *Game) dealCardsToPlayers() {
-	for i := 0; i < 2; i++ {
-		for _, p := range g.tm.players {
-			if p != nil {
-				p.DealCard(g.deck.Draw(), i)
-			}
-		}
-	}
-
-	// If debug mode is on, log all the players' hands
-	if DebugMode {
-		for _, p := range g.tm.players {
-			if p != nil {
-				mylog.Infof("%s's hand: [%s]\n", p.Name(), p.ShowHand().String())
-			}
-		}
-	}
-	mylog.Info("Dealing cards to players successfully")
 }
 
 // Deal the community cards when preflop is over,
@@ -477,23 +451,27 @@ func (g *Game) dealTheRestOfCommunityCards() {
 
 func (g *Game) firstPlayerActionInRound() bool {
 	// If there is only one player, the player wins the pot
-	if g.tm.GetNumberOfPlayingPlayers() == 1 {
+	if g.tm.CountPlayablePlayers() == 1 {
 		// Log only one player in the game
 		mylog.Debug("Only one player in the game!")
 		return false
 	}
 
 	// First player to act is the player next to the dealer
-	np := g.tm.NextPlayer(g.gs.ButtonPosition, msgpb.PlayerStatusType_Playing)
+	np, found := g.tm.FindNextPlayablePlayer(g.gs.ButtonPosition,
+		map[msgpb.PlayerStatusType]bool{
+			msgpb.PlayerStatusType_Playing: true,
+			msgpb.PlayerStatusType_SB:      true,
+			msgpb.PlayerStatusType_BB:      true,
+		})
 
 	if np != nil {
 		np.UpdateStatus(msgpb.PlayerStatusType_Wait4Act)
 		np.UpdateInvalidAction([]msgpb.PlayerGameActionType{msgpb.PlayerGameActionType_FOLD, msgpb.PlayerGameActionType_CALL})
 		// np.UpdateSuggestions([]msgpb.PlayerGameActionType{Check, Raise, AllIn})
-		return true
+		return found
 	}
-
-	return false
+	return found
 }
 
 func (g *Game) handleCurrentRoundIsOver() {
@@ -501,7 +479,7 @@ func (g *Game) handleCurrentRoundIsOver() {
 	case msgpb.RoundStateType_INITIAL:
 		g.prepareForIncomingGame()
 		// Deal private cards to players
-		g.dealCardsToPlayers()
+		g.tm.DealCardsToPlayers(g.deck)
 		// reset betting state for next preflop round
 		g.prepareForNewBettingRound()
 		// Take blinds should be done after reset betting state
@@ -575,7 +553,7 @@ func (g *Game) handleCurrentRoundIsOver() {
 		// In case the game is over, continue to the next game
 		g.prepareForIncomingGame()
 		// Deal private cards to players
-		g.dealCardsToPlayers()
+		g.tm.DealCardsToPlayers(g.deck)
 		// reset betting state for next preflop round
 		g.prepareForNewBettingRound()
 		// Take blinds should be done after reset betting state
@@ -586,28 +564,24 @@ func (g *Game) handleCurrentRoundIsOver() {
 }
 
 func (g *Game) evaluateHandsAndUpdateResult() {
-	if g.gs.NumPlayingPlayer == 1 {
-		// Log the winner
-		onePlayer := g.tm.GetListOfPlayers(
-			msgpb.PlayerStatusType_Playing,
-			msgpb.PlayerStatusType_Call,
-			msgpb.PlayerStatusType_Check,
-			msgpb.PlayerStatusType_Raise,
-			msgpb.PlayerStatusType_AllIn)
-		if len(onePlayer) != 1 {
-			panic("error: more than one player in the game")
+	if g.gs.readyPlayersCount == 1 {
+		last, ok := g.tm.FindLastStayingPlayer()
+		if ok {
+			// Log error when finding the last player
+			mylog.Infof("Player [%s] wins the pot (%d) WITHOUT SHOWING HAND\n", last.Name(), g.gs.pot.Total())
+			last.UpdateStatus(msgpb.PlayerStatusType_WINNER)
+			last.AddWonChips(g.gs.pot.Total())
+		} else {
+			panic("Game logic error: Can not find the last player")
 		}
-		mylog.Infof("Player %s wins the pot (%d) with a hand [[NOT_SHOWN]]\n", onePlayer[0].Name(), g.gs.pot.Total())
-		onePlayer[0].UpdateStatus(msgpb.PlayerStatusType_WINNER)
-		onePlayer[0].AddWonChips(g.gs.pot.Total())
 	} else {
 		// Evaluate hands to find the winner for main pot and side pot
 		mylog.Debug("Evaluating hands to determine the winner")
 		allEveluateedHands := []*msgpb.PeerState{}
 
 		// First evaluate the player's hands
-		for _, p := range g.tm.players {
-			if p != nil && p.Status() != msgpb.PlayerStatusType_Fold {
+		g.tm.DoAttachedFunctionToAllPlayers(func(p Player) {
+			if p.HasPocketCards() && p.ShowHand() != nil {
 				// Start evaluating the player's hand
 				mylog.Debugf("Evaluating player %s: [%s]\n", p.Name(), p.ShowHand().String())
 				p.ShowHand().Evaluate(&g.gs.cc)
@@ -619,7 +593,7 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 					p.ShowHand().SortedDecendingRankValue(),
 					p.ShowHand().GetPlayerHandRanking())
 			}
-		}
+		})
 
 		// Find the winner for the main pot and side pots
 		sidePots := g.gs.pot.CalculateSidePots()
@@ -630,12 +604,12 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 			joinedPlayers := []string{}
 			// Find the winner for the side pot
 			for _, pos := range sidePot.Players {
-				p := g.tm.GetPlayer(pos)
+				p, ok := g.tm.GetPlayerAtPosition(pos)
 				// Add name to the list of players that shared the side pot
-				if p != nil {
+				if ok && p.HasPocketCards() {
 					joinedPlayers = append(joinedPlayers, p.Name())
 				} else {
-					joinedPlayers = append(joinedPlayers, "NotHere")
+					joinedPlayers = append(joinedPlayers, p.Name()+" (Folded)")
 				}
 
 				if p != nil && p.Status() != msgpb.PlayerStatusType_Fold {
@@ -665,7 +639,6 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 						// Log this edge case
 						mylog.Debugf("Pre winner [%s] still wins the tiebreakers", winners[0].Name())
 					}
-
 				}
 			}
 
@@ -686,9 +659,9 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 			joinedPlayers, winners = nil, nil
 		}
 
-		// First evaluate the player's hands
-		for _, p := range g.tm.players {
-			if p != nil && p.Status() != msgpb.PlayerStatusType_Fold {
+		// Update the player status and add the player to the list of evaluated hands
+		g.tm.DoAttachedFunctionToAllPlayers(func(p Player) {
+			if p.HasPocketCards() {
 				if p.ChipChange() >= 0 {
 					p.UpdateStatus(msgpb.PlayerStatusType_WINNER)
 					mylog.Infof("Player %s WIN the pot (+%d) with a hand >> [ %s ]\n",
@@ -699,15 +672,14 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 						p.Name(), p.ChipChange(), p.ShowHand().GetPlayerHandRanking())
 				}
 				// Add the player to the list of evaluated hands
-				allEveluateedHands = append(allEveluateedHands,
-					&msgpb.PeerState{
-						TablePos:      int32(p.Position()),
-						PlayerCards:   p.ShowHand().Cards(),
-						HandRanking:   p.ShowHand().GetPlayerHandRanking(),
-						EvaluatedHand: p.ShowHand().BestHand(),
-					})
+				allEveluateedHands = append(allEveluateedHands, &msgpb.PeerState{
+					TablePos:      int32(p.Position()),
+					PlayerCards:   p.ShowHand().Cards(),
+					HandRanking:   p.ShowHand().GetPlayerHandRanking(),
+					EvaluatedHand: p.ShowHand().BestHand(),
+				})
 			}
-		}
+		})
 
 		// Update the result and showing hands
 		g.gs.FinalResult = &msgpb.Result{

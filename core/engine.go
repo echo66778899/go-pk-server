@@ -98,7 +98,7 @@ func (e EngineState) String() string {
 type GameEngine struct {
 	gameSessionID int
 	balanceMgr    *BalanceManager
-	playerMgr     *TableManager
+	playerMgr     *Table
 	game          *Game
 	auto          *AutoInputProducer
 	room          PublicRoom
@@ -125,7 +125,7 @@ func NewGameEngine() GameEngineIf {
 		eState:        EngineState_INITIALIZING,
 		eventDriven:   false,
 		balanceMgr:    NewBalanceManager(),
-		playerMgr:     NewTableManager(),
+		playerMgr:     NewTable(),
 		eInputCh:      ch,
 		auto:          NewAutoInputProducer(ch),
 	}
@@ -288,10 +288,11 @@ func (g *GameEngine) NotifyGameState() {
 	case NotifyGameStateReason_NEW_GAME:
 		// Notify directly to all players if they have new cards
 		for _, player := range g.playerMgr.players {
-			if player != nil && player.HasNewCards() {
+			if player != nil && player.HasPocketCards() {
 				player.NotifyPlayerIfNewHand()
 			}
 		}
+	default:
 	}
 
 	// Always notify the game state
@@ -333,7 +334,7 @@ func (g *GameEngine) handleJoiningPlayer(player Player) {
 		fmt.Printf("Player %s joined the game\n", player.Name())
 		g.playerMgr.AddPlayer(player.Position(), player)
 		// If first player joined, set the game button position
-		if g.playerMgr.GetNumberOfPlayers() == 1 {
+		if g.playerMgr.CountSeatedPlayers() == 1 {
 			g.game.gs.ButtonPosition = player.Position()
 		}
 	}
@@ -390,7 +391,7 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 		if len(opts) > 0 {
 			// Find the player
 			reqPlayerIdx := int(opts[0])
-			player := g.playerMgr.GetPlayer(reqPlayerIdx)
+			player, _ := g.playerMgr.GetPlayerAtPosition(reqPlayerIdx)
 			if player != nil {
 				input := Input{Type: PlayerLeft, PlayerInfo: player}
 				g.processActions(input)
@@ -407,7 +408,7 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 		if len(opts) > 0 {
 			reqPlayerIdx := int(opts[0])
 			// Find the player
-			player := g.playerMgr.GetPlayer(reqPlayerIdx)
+			player, _ := g.playerMgr.GetPlayerAtPosition(reqPlayerIdx)
 			if player == nil {
 				mylog.Errorf("Requesting add chips to player %d not found ", reqPlayerIdx)
 			} else {
@@ -424,7 +425,7 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 		if len(opts) > 0 {
 			reqPlayerIdx := int(opts[0])
 			// Find the player
-			player := g.playerMgr.GetPlayer(reqPlayerIdx)
+			player, _ := g.playerMgr.GetPlayerAtPosition(reqPlayerIdx)
 			if player == nil {
 				mylog.Errorf("Requesting payback chips from player %d not found ", reqPlayerIdx)
 			} else {
@@ -495,7 +496,7 @@ func (g *GameEngine) GetGameState() *msgpb.GameState {
 				Status:        player.Status(),
 				CurrentBet:    int32(player.CurrentBet()),
 				ChangeAmount:  int32(player.ChipChange()),
-				NoActions:     player.UnsupportActs(),
+				NoActions:     player.UnsupportAction(),
 			})
 		}
 	}

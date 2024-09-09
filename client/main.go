@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	SKIP_LOGIN_ROOM    = false
-	AUTO_ENTER_REQUEST = false
+	SKIP_LOGIN_ROOM    = true
+	AUTO_ENTER_REQUEST = true
 	// pointsChan         = make(chan int)
 	keyboardEventsChan = make(chan ui.KeyboardEvent)
 )

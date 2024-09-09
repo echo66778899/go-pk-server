@@ -23,12 +23,17 @@ func (h *Hand) SetCard(card *msgpb.Card, idx int) {
 	h.playerCards[idx] = card
 }
 
+func (h *Hand) HasCards() bool {
+	return h.playerCards[0] != nil && h.playerCards[1] != nil
+}
+
 func (h *Hand) Cards() []*msgpb.Card {
 	return h.playerCards[:]
 }
 
 func (h *Hand) Reset() {
-	h.playerCards = [2]*msgpb.Card{}
+	h.playerCards[0] = nil
+	h.playerCards[1] = nil
 	h.rank = msgpb.HankRankingType(-1)
 	h.bestHand = []*msgpb.Card{}
 	h.bestTiebreaker = []msgpb.RankType{}
