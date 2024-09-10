@@ -53,12 +53,14 @@ func handleGameState(gs *msgpb.GameState) {
 	if ui.UI_MODEL_DATA.YourPlayerState == nil || len(ui.UI_MODEL_DATA.Players) == 0 {
 		ui.UI_MODEL_DATA.ActiveButtonMenu = ui.ButtonMenuType_SLOTS_BTN
 		ui.UI_MODEL_DATA.IsButtonEnabled = true
+		ui.UI_MODEL_DATA.IsButtonsVisible = true
 		// Reset the YourTablePosition
 		ui.UI_MODEL_DATA.YourTablePosition = 0
 	}
 
 	// Enable control buttons when the username is in the list of players
 	if ui.UI_MODEL_DATA.YourPlayerState != nil {
+		ui.UI_MODEL_DATA.IsButtonsVisible = true
 		switch gs.CurrentRound {
 		case msgpb.RoundStateType_INITIAL:
 			ui.UI_MODEL_DATA.ActiveButtonMenu = ui.ButtonMenuType_CTRL_BTN
@@ -67,6 +69,8 @@ func handleGameState(gs *msgpb.GameState) {
 			ui.UI_MODEL_DATA.ActiveButtonMenu = ui.ButtonMenuType_PLAYING_BTN
 			if ui.UI_MODEL_DATA.YourPlayerState.Status == msgpb.PlayerStatusType_Wait4Act {
 				ui.UI_MODEL_DATA.IsButtonEnabled = true
+			} else if ui.UI_MODEL_DATA.YourPlayerState.Status == msgpb.PlayerStatusType_Spectating {
+				ui.UI_MODEL_DATA.IsButtonsVisible = false
 			} else {
 				ui.UI_MODEL_DATA.IsButtonEnabled = false
 			}

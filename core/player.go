@@ -138,7 +138,7 @@ func (p *OnlinePlayer) AddChips(amount int) {
 	p.chips += amount
 	mylog.Debugf("Player %s's chips are added by %d. Total chips: %d\n", p.name, amount, p.chips)
 	// If player is sat out, set status to playing
-	if p.status == msgpb.PlayerStatusType_Unplayable {
+	if p.status == msgpb.PlayerStatusType_Sat_Out {
 		p.status = msgpb.PlayerStatusType_Playing
 	}
 }
@@ -181,7 +181,7 @@ func (p *OnlinePlayer) PrepareNewGame() {
 	p.currentBet = 0
 	p.invalidPGA = nil
 	// player status
-	if (p.status != msgpb.PlayerStatusType_Unplayable) &&
+	if (p.status != msgpb.PlayerStatusType_Sat_Out) &&
 		(p.status != msgpb.PlayerStatusType_Spectating) {
 		mylog.Debugf("Player %s's status is reset from %s to %s for new game\n",
 			p.name, p.status, msgpb.PlayerStatusType_Playing)
@@ -196,7 +196,7 @@ func (p *OnlinePlayer) ResetPlayerState() {
 	// player state
 	p.position = 0
 	p.chips = 0
-	p.status = msgpb.PlayerStatusType_Unplayable
+	p.status = msgpb.PlayerStatusType_Sat_Out
 }
 
 func (p *OnlinePlayer) IsSpectating() bool {

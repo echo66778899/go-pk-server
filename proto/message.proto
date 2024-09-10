@@ -43,7 +43,7 @@ enum HankRankingType {
 }
 
 enum PlayerStatusType {
-    Unplayable = 0;   // Player is unable to play the game
+    Sat_Out = 0;      // Player is sat out the game
     Spectating  = 1;  // Player is sat in but not playing
     Playing = 2;      // Player is playing
     Wait4Act = 3;     // Player is waiting for user action in their turn

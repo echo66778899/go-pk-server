@@ -58,7 +58,7 @@ func (pg *PlayersGroup) UpdateState(force bool) {
 			UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_FLOP ||
 			UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_TURN ||
 			UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_RIVER {
-			pg.PlayersUI[ui_idx].SetCurBet(int(p.CurrentBet))
+			pg.PlayersUI[ui_idx].SetValueStatus(int(p.CurrentBet))
 		}
 	}
 

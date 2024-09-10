@@ -74,20 +74,25 @@ func (p *Pot) CalculateSidePots() []SidePot {
 	totalPlayers := len(players)
 
 	// Keep track of the total chips bet in each round
-	previousBet := 0
+	previousBet, beginPlayer := 0, 0
 
-	for _, player := range players {
+	for it := 0; it < len(players); it++ {
+		if it < beginPlayer {
+			continue
+		}
 		// Calculate how much this player contributes to the current side pot
-		currentBet := player.Bet
+		currentBet := players[it].Bet
 
 		// If this player's bet is higher than the previous one, we calculate a side pot
 		if currentBet > previousBet {
+			// Mark position of the player who go to new side
+			beginPlayer = it
 			// Calculate the size of this side pot
 			sidePotAmount := (currentBet - previousBet) * totalPlayers
 
 			// Add this side pot to the list
 			potPlayers := make([]int, 0)
-			for _, p := range players[:totalPlayers] { // Only active players in the current side pot
+			for _, p := range players[beginPlayer:] { // Only remain players in the current side pot
 				potPlayers = append(potPlayers, p.TablePos)
 			}
 
@@ -99,8 +104,9 @@ func (p *Pot) CalculateSidePots() []SidePot {
 			// Update the previous bet
 			previousBet = currentBet
 		}
-
-		// Reduce the number of players for the next side pot
+		// Remove the player who left the pot
+		beginPlayer++
+		// Decrease the total players
 		totalPlayers--
 	}
 

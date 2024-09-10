@@ -101,7 +101,7 @@ func (cm *ConnectionManager) serveWebSocket(w http.ResponseWriter, r *http.Reque
 	defer room.RemoveClient(conn)
 
 	for {
-		msgType, blob, err := c.ws.ReadMessage()
+		msgType, blob, err := c.conn.ws.ReadMessage()
 		if err != nil {
 			mylog.Errorf("Error reading message: %v", err)
 			break

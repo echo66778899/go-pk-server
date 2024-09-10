@@ -34,6 +34,7 @@ type Model struct {
 	// For UI buttons control
 	ActiveButtonMenu UIButtonMenuType
 	IsButtonEnabled  bool
+	IsButtonsVisible bool
 
 	sync.Mutex
 }

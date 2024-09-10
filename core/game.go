@@ -196,7 +196,7 @@ func (g *Game) HandleActions(action ActionIf) {
 			player.UpdateStatus(msgpb.PlayerStatusType_Call)
 		}
 		g.gs.pot.AddToPot(player.Position(), callChip)
-		g.gs.CurrentBet = player.CurrentBet()
+		// call does not change the current bet
 	case msgpb.PlayerGameActionType_RAISE:
 		// Execute raise action
 		raiseAmount := action.HowMuch()
@@ -565,6 +565,7 @@ func (g *Game) handleCurrentRoundIsOver() {
 
 func (g *Game) evaluateHandsAndUpdateResult() {
 	if g.gs.readyPlayersCount == 1 {
+		mylog.Info("Only one player in the game! The player wins the pot")
 		last, ok := g.tm.FindLastStayingPlayer()
 		if ok {
 			// Log error when finding the last player
@@ -600,7 +601,7 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 		winners := []Player{}
 		for i, sidePot := range sidePots {
 			// log info
-			mylog.Infof("Find who wins the POT[%d]: %d\n", i, sidePot.Amount)
+			mylog.Infof("Find who will win the POT[%d]: %d chips\n", i, sidePot.Amount)
 			joinedPlayers := []string{}
 			// Find the winner for the side pot
 			for _, pos := range sidePot.Players {
@@ -612,7 +613,7 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 					joinedPlayers = append(joinedPlayers, p.Name()+" (Folded)")
 				}
 
-				if p != nil && p.Status() != msgpb.PlayerStatusType_Fold {
+				if p != nil && p.HasPocketCards() {
 					// Reset the player current bet for UI display correctly
 					p.UpdateCurrentBet(0)
 
@@ -644,10 +645,10 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 
 			// Log the side pot
 			if i == 0 {
-				mylog.Infof("Main pot: %d chips (Players: [%s]). Pot's winner: [%s]\n",
+				mylog.Infof("MAIN pot: %d chips (Players: [%s]). Pot's winner: [%s]\n",
 					sidePot.Amount, strings.Join(joinedPlayers, ", "), getWinnersName(winners))
 			} else {
-				mylog.Infof("Side pot %d: %d chips (Players: [%s]). Pot's winner: [%s]\n",
+				mylog.Infof("Side pot[%d]: %d chips (Players: [%s]). Pot's winner: [%s]\n",
 					i, sidePot.Amount, strings.Join(joinedPlayers, ", "), getWinnersName(winners))
 			}
 

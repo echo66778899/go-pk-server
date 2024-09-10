@@ -392,6 +392,7 @@ func main() {
 		btnCtrl.EnableButtonCtrl(ui.UI_MODEL_DATA.IsButtonEnabled)
 		btnCtrl.UpdateState()
 		btnCtrl.DisableListButton(ui.UI_MODEL_DATA.YourPlayerState)
+		btnCtrl.IsVisible = ui.UI_MODEL_DATA.IsButtonsVisible
 
 		playerWg.UpdateState(true)
 		playerWg.UpdateGroupPlayers(ui.UI_MODEL_DATA.MaxPlayers)

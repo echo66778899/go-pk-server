@@ -11,6 +11,7 @@ type Table struct {
 	players       map[int]Player
 
 	// whole table state
+	minStackSize  int
 	dealerPos     int
 	smallBlindPos int
 	bigBlindPos   int
@@ -51,13 +52,17 @@ func (thisTable *Table) UpdateMaxSeat(sn int) {
 		// Log invalid number of slots
 		mylog.Debugf("Invalid number of slots=%d\n", sn)
 		return
-
 	}
 	thisTable.numberOfSlots = sn
 }
 
 func (thisTable *Table) CountSeatedPlayers() int {
 	count := 0
+	mylog.Debugf("Players map is %+v when count playable player\n", thisTable.players)
+	if thisTable.players == nil {
+		mylog.Errorf("Players map is nil\n")
+		return count
+	}
 	for _, p := range thisTable.players {
 		if p != nil {
 			count++
@@ -68,6 +73,11 @@ func (thisTable *Table) CountSeatedPlayers() int {
 
 func (thisTable *Table) CountPlayablePlayers() int {
 	count := 0
+	mylog.Debugf("Players map is %+v when count playable player\n", thisTable.players)
+	if thisTable.players == nil {
+		mylog.Errorf("Players map is nil\n")
+		return count
+	}
 	for _, p := range thisTable.players {
 		if p != nil &&
 			p.Status() == msgpb.PlayerStatusType_Playing ||
@@ -82,16 +92,17 @@ func (thisTable *Table) CountPlayablePlayers() int {
 // CheckPlayersReadiness() bool
 func (thisTable *Table) CheckPlayersReadiness(s *msgpb.GameSetting) bool {
 	mylog.Debugf("Check player readiness with min stack=%d\n", s.MinStackSize)
+	thisTable.minStackSize = int(s.MinStackSize)
 	// Check if all players are ready
 	for _, p := range thisTable.players {
 		if p != nil {
 			// If chip >= min chip
 			if p.Chips() < int(s.MinStackSize) {
 				mylog.Errorf("Player %s has not enough chips\n", p.Name())
-				p.UpdateStatus(msgpb.PlayerStatusType_Unplayable)
+				p.UpdateStatus(msgpb.PlayerStatusType_Sat_Out)
 				return false
 			} else {
-				if p.IsSpectating() { // If player is spectating
+				if p.IsSpectating() { // If player still want spectating
 					p.UpdateStatus(msgpb.PlayerStatusType_Spectating)
 				} else {
 					p.UpdateStatus(msgpb.PlayerStatusType_Playing)
@@ -282,6 +293,7 @@ func (thisTable *Table) AddPlayer(reqSlot int, p Player) {
 		// Log player has been added
 		mylog.Debugf("Player %s has been added to slot %d. Total players: %d\n",
 			p.Name(), reqSlot, thisTable.CountSeatedPlayers())
+		p.UpdateStatus(msgpb.PlayerStatusType_Spectating)
 	} else {
 		// Log requets slot is not available
 		mylog.Debugf("Slot %d is not available\n", reqSlot)

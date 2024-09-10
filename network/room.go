@@ -85,7 +85,7 @@ func (r *Room) RemoveClient(conn *websocket.Conn) {
 	defer r.mtx.Unlock()
 	userNameId := ""
 	for _, c := range r.people {
-		if c.ws == conn {
+		if c.conn.ws == conn {
 			userNameId = c.Username
 			c.handleDisconnect()
 			break
@@ -108,7 +108,7 @@ func (r *Room) UpdateConnection(username userId, wsconn *websocket.Conn) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	if c, ok := r.people[userId(username)]; ok {
-		c.ws = wsconn
+		c.conn.ws = wsconn
 	}
 }
 

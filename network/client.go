@@ -5,16 +5,23 @@ import (
 	core "go-pk-server/core"
 	msgpb "go-pk-server/gen"
 	mylog "go-pk-server/log"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 )
 
+type SafeConn struct {
+	ws *websocket.Conn
+	mu sync.Mutex
+}
+
 type Client struct {
 	Username string
 	GroupId  uint64
 	player   *core.OnlinePlayer
-	ws       *websocket.Conn
+
+	conn *SafeConn
 }
 
 func newConnectedClient(username string, gId uint64, roomAgent core.Agent, ws *websocket.Conn) *Client {
@@ -22,7 +29,7 @@ func newConnectedClient(username string, gId uint64, roomAgent core.Agent, ws *w
 		Username: username,
 		GroupId:  gId,
 		player:   core.NewOnlinePlayer(username, roomAgent, gId),
-		ws:       ws,
+		conn:     &SafeConn{ws: ws},
 	}
 }
 
@@ -30,7 +37,7 @@ func (c *Client) send(message *msgpb.ServerMessage) error {
 	if message == nil {
 		return errors.New("message is nil")
 	}
-	if c.ws == nil {
+	if c.conn.ws == nil {
 		return errors.New("websocket connection not found")
 	}
 	// Serialize (marshal) the protobuf message
@@ -40,7 +47,9 @@ func (c *Client) send(message *msgpb.ServerMessage) error {
 		return err
 	}
 	// Send the response
-	if err := c.ws.WriteMessage(websocket.BinaryMessage, sendData); err != nil {
+	c.conn.mu.Lock()
+	defer c.conn.mu.Unlock()
+	if err := c.conn.ws.WriteMessage(websocket.BinaryMessage, sendData); err != nil {
 		mylog.Errorf("Failed to write message to client: %v", err)
 		return err
 	}

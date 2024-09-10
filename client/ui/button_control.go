@@ -37,6 +37,7 @@ type ButtonCtrlCenter struct {
 	// ButtonCtrl is the controller for the buttons.
 	availableSlots   int
 	selectingBtnMenu UIButtonMenuType
+	IsVisible        bool
 	CtrlEnabled      bool
 	PlayingButtons   []*Button
 	ControlButtons   []*Button
@@ -103,6 +104,9 @@ func (b *ButtonCtrlCenter) InitButtonPosition() {
 }
 
 func (b *ButtonCtrlCenter) GetDisplayingButton() []Drawable {
+	if !b.IsVisible {
+		return nil
+	}
 	// Add shold be in order of the buttons
 	switch b.selectingBtnMenu {
 	case ButtonMenuType_PLAYING_BTN:

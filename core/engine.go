@@ -241,6 +241,9 @@ func (g *GameEngine) RunGameEngine(input Input) {
 				g.gotoState(EngineState_WAIT_FOR_PLAYING, "Failed to handle next game")
 				g.needNtfAndReason(NofityGameStateReason_ALL)
 			}
+		case PlayerJoined:
+			mylog.Warnf("Player %s joined during the game", input.PlayerInfo.Name())
+			g.handleJoiningPlayer(input.PlayerInfo)
 		case PlayerLeft:
 			mylog.Warnf("Player %s left during the game", input.PlayerInfo.Name())
 			g.handleLeavingPlayer(input.PlayerInfo)
