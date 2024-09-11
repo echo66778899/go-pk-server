@@ -15,6 +15,7 @@ type BalanceManager struct {
 func NewBalanceManager() *BalanceManager {
 	return &BalanceManager{
 		balance: make(map[string]int),
+		inUse:   make(map[string]int),
 	}
 }
 

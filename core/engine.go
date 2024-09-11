@@ -425,6 +425,7 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 				mylog.Errorf("Requesting add chips to player %d not found ", reqPlayerIdx)
 			} else {
 				player.AddChips(g.balanceMgr.TakeOneBuyIn(player.Name()))
+				g.balanceMgr.UpdateCurrentPlayerChip(player.Name(), player.Chips())
 				g.needNtfAndReason(NofityGameStateReason_SYNC_BALANCE)
 			}
 		} else {
@@ -445,6 +446,7 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 				if player.Chips()-BUY_IN_SIZE > BUY_IN_SIZE-int(g.game.setting.MinStackSize) {
 					player.TakeChips(BUY_IN_SIZE)
 					g.balanceMgr.PaybackOneBuyIn(player.Name())
+					g.balanceMgr.UpdateCurrentPlayerChip(player.Name(), player.Chips())
 					g.needNtfAndReason(NofityGameStateReason_SYNC_BALANCE)
 				}
 			}
