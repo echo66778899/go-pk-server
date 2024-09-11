@@ -244,8 +244,8 @@ func (g *Game) HandleActions(action ActionIf) {
 	if g.gs.readyPlayersCount <= 1 {
 		// Log only 1
 		mylog.Infof("Only one last player in the game! Gane is going to be over")
-		g.gs.CurrentRound = msgpb.RoundStateType_SHOWDOWN
 		g.evaluateHandsAndUpdateResult()
+		g.gs.CurrentRound = msgpb.RoundStateType_SHOWDOWN
 		return
 	} else if np, _ := g.tm.FindNextPlayablePlayer(action.AtPosition(), map[msgpb.PlayerStatusType]bool{ // and first found to msgpb.PlayerStatusType_Wait4Act
 		msgpb.PlayerStatusType_Playing: true,
@@ -356,7 +356,9 @@ func (g *Game) takeBlinds() {
 
 	// Update the next active player
 	np, ok := g.tm.FindNextPlayablePlayer(bbPlayer.Position(),
-		map[msgpb.PlayerStatusType]bool{msgpb.PlayerStatusType_Playing: true})
+		map[msgpb.PlayerStatusType]bool{
+			msgpb.PlayerStatusType_Playing: true,
+			msgpb.PlayerStatusType_SB:      true})
 	if ok {
 		np.UpdateStatus(msgpb.PlayerStatusType_Wait4Act)
 		np.UpdateInvalidAction([]msgpb.PlayerGameActionType{msgpb.PlayerGameActionType_CHECK})

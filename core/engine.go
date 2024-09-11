@@ -230,7 +230,15 @@ func (g *GameEngine) RunGameEngine(input Input) {
 		switch input.Type {
 		case PlayerActed:
 			g.game.HandleActions(input.PlayerAct)
-			g.needNtfAndReason(NotifyGameStateReason_NEW_ACTION)
+			// If showdowm, notify the game state
+			if g.game.gs.CurrentRound == msgpb.RoundStateType_SHOWDOWN {
+				g.game.tm.DoAttachedFunctionToAllPlayers(func(p Player) {
+					g.balanceMgr.UpdateCurrentPlayerChip(p.Name(), p.Chips())
+				})
+				g.needNtfAndReason(NofityGameStateReason_SYNC_BALANCE)
+			} else {
+				g.needNtfAndReason(NotifyGameStateReason_NEW_ACTION)
+			}
 		case GameEnded:
 			// Log the game end
 			mylog.Info("Handle Game ended event")
@@ -353,6 +361,7 @@ func (g *GameEngine) handleLeavingPlayer(player Player) {
 		remaining := player.Chips()
 		if remaining > 0 {
 			g.balanceMgr.ReturnStack(player.Name(), remaining)
+			g.balanceMgr.UpdateCurrentPlayerChip(player.Name(), 0)
 			g.needNtfAndReason(NofityGameStateReason_SYNC_BALANCE)
 		}
 		// Remove and If no player left, reset the game

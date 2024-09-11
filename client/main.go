@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	SKIP_LOGIN_ROOM    = true
-	AUTO_ENTER_REQUEST = true
+	SKIP_LOGIN_ROOM    = false
+	AUTO_ENTER_REQUEST = false
 	// pointsChan         = make(chan int)
 	keyboardEventsChan = make(chan ui.KeyboardEvent)
 )
@@ -128,7 +128,7 @@ func getRoomInfoInput(selection string) (playerName, room, passcode, sessId stri
 
 	// Enter the authentication details
 	fmt.Println("+-------------------------------------------+")
-	fmt.Println("|  Welcome to the Poker Game Client v1.0.0  |")
+	fmt.Println("|  Welcome to the Poker Game Client v1.1.0  |")
 	fmt.Println("+-------------------------------------------+")
 	fmt.Print("-> Enter your name (no space): ")
 

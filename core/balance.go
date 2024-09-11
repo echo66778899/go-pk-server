@@ -9,6 +9,7 @@ const BUY_IN_SIZE = 2000
 
 type BalanceManager struct {
 	balance map[string]int
+	inUse   map[string]int
 }
 
 func NewBalanceManager() *BalanceManager {
@@ -34,11 +35,19 @@ func (bm *BalanceManager) PaybackOneBuyIn(name string) {
 func (bm *BalanceManager) ReturnStack(name string, amount int) {
 	mylog.Infof("Player %s has returned %d chips, balance is now %d.", name, amount, bm.balance[name])
 	bm.balance[name] += amount
+	if bm.balance[name] == 0 {
+		mylog.Infof("Player %s is busted.", name)
+		delete(bm.balance, name)
+	}
+}
+
+func (bm *BalanceManager) UpdateCurrentPlayerChip(name string, amount int) {
+	bm.inUse[name] = amount
 }
 
 func (bm *BalanceManager) GetBalance(name string) int {
 	mylog.Infof("Player %s has balance %d.", name, bm.balance[name])
-	return bm.balance[name]
+	return bm.balance[name] + bm.inUse[name]
 }
 
 func (bm *BalanceManager) GetBalanceSummary() *msgpb.BalanceInfo {
@@ -48,7 +57,7 @@ func (bm *BalanceManager) GetBalanceSummary() *msgpb.BalanceInfo {
 	for name, balance := range bm.balance {
 		balanceInfo.PlayerBalances = append(balanceInfo.PlayerBalances, &msgpb.PlayerBalance{
 			PlayerName: name,
-			Balance:    int32(balance),
+			Balance:    int32(balance) + int32(bm.inUse[name]),
 		})
 	}
 	return balanceInfo
