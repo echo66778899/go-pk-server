@@ -294,7 +294,6 @@ func (g *Game) prepareForIncomingGame() {
 
 	// Shuffle the deck
 	g.deck.Shuffle()
-	g.deck.CutTheCard()
 
 	// Choose the dealer position
 	g.gs.ButtonPosition = g.tm.DetermineNextButtonPosition(g.gs.ButtonPosition)
@@ -328,12 +327,15 @@ func (g *Game) resetGameStateForNewRound() {
 func (g *Game) takeBlinds() {
 	sbPlayer, _ := g.tm.FindNextPlayablePlayer(g.gs.ButtonPosition,
 		map[msgpb.PlayerStatusType]bool{msgpb.PlayerStatusType_SB: true})
-	bbPlayer, _ := g.tm.FindNextPlayablePlayer(g.gs.ButtonPosition,
+	if sbPlayer == nil {
+		mylog.Errorf("Can not determine the small blind player\n")
+		return
+	}
+	bbPlayer, _ := g.tm.FindNextPlayablePlayer(sbPlayer.Position(),
 		map[msgpb.PlayerStatusType]bool{msgpb.PlayerStatusType_BB: true})
 
-	if sbPlayer == nil || bbPlayer == nil {
-		// Log error when taking blinds
-		mylog.Debug("error: Can not take blinds")
+	if bbPlayer == nil {
+		mylog.Errorf("Can not determine the big blind player\n")
 		return
 	}
 
