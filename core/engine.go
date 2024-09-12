@@ -364,11 +364,12 @@ func (g *GameEngine) handleLeavingPlayer(player Player) {
 			g.balanceMgr.UpdateCurrentPlayerChip(player.Name(), 0)
 			g.needNtfAndReason(NofityGameStateReason_SYNC_BALANCE)
 		}
+
 		// Remove and If no player left, reset the game
-		if g.playerMgr.RemovePlayer(player.Position()) < 2 {
-			g.gotoState(EngineState_WAIT_FOR_PLAYING, "Not enough players")
-			g.game.ResetGame(true)
-		}
+		g.playerMgr.RemovePlayer(player.Position())
+
+		// Handle next player to play
+		g.game.HandlePlayerLeaveDuringTheGame(player.Position())
 	}
 }
 
@@ -415,7 +416,7 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 		}
 	case "request_buyin":
 		mylog.Info("A player sending request to ADD 1 buyin")
-		// parse optional amount
+		// parse optional their position
 		opts := intput.ControlAct.GetOptions()
 		if len(opts) > 0 {
 			reqPlayerIdx := int(opts[0])
@@ -433,7 +434,7 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 		}
 	case "payback_buyin":
 		mylog.Info("A player sending request to PAYBACK 1 buyin")
-		// parse optional amount
+		// parse optional their position
 		opts := intput.ControlAct.GetOptions()
 		if len(opts) > 0 {
 			reqPlayerIdx := int(opts[0])
@@ -459,6 +460,16 @@ func (g *GameEngine) handleControlMessage(intput Input) {
 		// send refresh input to sync the game state
 		act := Input{Type: GaneInputType(Refresh)}
 		g.processActions(act)
+	case "show_your_hand":
+		mylog.Info("A player has requested to show their hand in showdown state")
+		// parse optional their position)
+		opts := intput.ControlAct.GetOptions()
+		if len(opts) > 0 {
+			reqPlayerIdx := int(opts[0])
+			g.game.ShowPlayerHand(reqPlayerIdx)
+		} else {
+			mylog.Errorf("Did not provide player id to show hand")
+		}
 	default:
 		mylog.Errorf("Game engine not support control message type: %v", ctrlActionName)
 		g.needNtfAndReason(NotifyGameStateReason_DONT_NOFITY)

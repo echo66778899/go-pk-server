@@ -83,7 +83,7 @@ func (h *Hand) bestKickerString() (kickerString string) {
 
 func (h *Hand) GetPlayerHandRanking() string {
 	if h.rank == msgpb.HankRankingType(-1) || !h.HasCards() {
-		return "Unknown"
+		return ""
 	}
 
 	rankString := strings.ReplaceAll(h.rank.String(), "_", " ")

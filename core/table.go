@@ -79,11 +79,12 @@ func (thisTable *Table) CountPlayablePlayers() int {
 		return count
 	}
 	for _, p := range thisTable.players {
-		if p != nil &&
-			p.Status() == msgpb.PlayerStatusType_Playing ||
-			p.Status() == msgpb.PlayerStatusType_SB ||
-			p.Status() == msgpb.PlayerStatusType_BB {
-			count++
+		if p != nil {
+			if p.Status() == msgpb.PlayerStatusType_Playing ||
+				p.Status() == msgpb.PlayerStatusType_SB ||
+				p.Status() == msgpb.PlayerStatusType_BB {
+				count++
+			}
 		}
 	}
 	return count
