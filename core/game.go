@@ -141,8 +141,8 @@ func (g *Game) HandlePlayerLeaveDuringTheGame(leftPos int) {
 func (g *Game) ResetGame(updateDealer bool) {
 	mylog.Infof("Resetting the game when current round is %s \n", g.gs.CurrentRound)
 
-	// Check if the pot is empty
-	if g.gs.pot.Total() > 0 {
+	// Check if the pot is empty, but not at showdown round
+	if g.gs.pot.Total() > 0 && g.gs.CurrentRound != msgpb.RoundStateType_SHOWDOWN {
 		// Log warning the pot is not empty
 		mylog.Warnf("Pot is not empty: %d\n", g.gs.pot.Total())
 		// Return the chips to the players
@@ -260,8 +260,9 @@ func (g *Game) HandleActions(action ActionIf) {
 		callChip := g.gs.CurrentBet - player.CurrentBet()
 		// If the player chip is less than the current bet, the player is all-in
 		if player.Chips() <= callChip {
-			player.UpdateCurrentBet(player.Chips() + player.CurrentBet())
-			player.GetChipForBet(player.Chips())
+			callChip = player.Chips()
+			player.UpdateCurrentBet(callChip + player.CurrentBet())
+			player.GetChipForBet(callChip)
 			player.UpdateStatus(msgpb.PlayerStatusType_AllIn)
 		} else {
 			player.UpdateCurrentBet(callChip + player.CurrentBet())
@@ -279,16 +280,14 @@ func (g *Game) HandleActions(action ActionIf) {
 
 		if raiseAmount+callAmount < player.Chips() {
 			raiseAmount += callAmount
-			player.UpdateCurrentBet(raiseAmount + player.CurrentBet())
-			player.GetChipForBet(raiseAmount)
 			player.UpdateStatus(msgpb.PlayerStatusType_Raise)
-			g.gs.pot.AddToPot(player.Position(), raiseAmount)
 		} else {
-			raiseAmount := player.Chips()
-			player.UpdateCurrentBet(raiseAmount + player.CurrentBet())
-			player.GetChipForBet(raiseAmount)
+			raiseAmount = player.Chips()
 			player.UpdateStatus(msgpb.PlayerStatusType_AllIn)
 		}
+		player.UpdateCurrentBet(raiseAmount + player.CurrentBet())
+		player.GetChipForBet(raiseAmount)
+		g.gs.pot.AddToPot(player.Position(), raiseAmount)
 		g.gs.CurrentBet = player.CurrentBet()
 		// Update all player status to msgpb.PlayerStatusType_Playing
 		g.tm.UpdatePlayerStatusDueToCurrentBetIncrease(player.Position())
@@ -651,8 +650,6 @@ func (g *Game) evaluateHandsAndUpdateResult() {
 		mylog.Info("Only one player in the game! The player wins the pot")
 		last, ok := g.tm.FindLastStayingPlayer()
 		if ok {
-			// Just evaluate the hand of the last player in case they want to show their hand
-			last.ShowHand().Evaluate(&g.gs.cc)
 			// Log error when finding the last player
 			mylog.Infof("Player [%s] wins the pot (%d) WITHOUT SHOWING HAND\n", last.Name(), g.gs.pot.Total())
 			last.UpdateStatus(msgpb.PlayerStatusType_WINNER)

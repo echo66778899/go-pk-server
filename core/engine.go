@@ -246,7 +246,7 @@ func (g *GameEngine) RunGameEngine(input Input) {
 				g.needNtfAndReason(NotifyGameStateReason_NEW_GAME)
 				// Continue to play a new game
 			} else {
-				g.gotoState(EngineState_WAIT_FOR_PLAYING, "Failed to handle next game")
+				g.gotoState(EngineState_PLAYING, "Failed to handle next game")
 				g.needNtfAndReason(NofityGameStateReason_ALL)
 			}
 		case PlayerJoined:
