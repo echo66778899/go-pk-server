@@ -17,6 +17,7 @@ const (
 	MENU1     KeyboardEventType = 9
 	MENU2     KeyboardEventType = 10
 	MENU3     KeyboardEventType = 11
+	REFRESH   KeyboardEventType = 12
 
 	START_GAME KeyboardEventType = 20
 	PAUSE_GAME KeyboardEventType = 21
@@ -68,8 +69,10 @@ func ListenToKeyboard(evChan chan KeyboardEvent) {
 				evChan <- KeyboardEvent{EventType: ENTER, Key: ev.Key}
 			case termbox.KeySpace:
 				evChan <- KeyboardEvent{EventType: SPACE, Key: ev.Key}
-			case termbox.KeyBackspace2:
+			case termbox.KeyBackspace, termbox.KeyBackspace2:
 				evChan <- KeyboardEvent{EventType: BACKSPACE, Key: ev.Key}
+			case termbox.KeyF5:
+				evChan <- KeyboardEvent{EventType: REFRESH, Key: ev.Key}
 			case termbox.KeyEsc:
 				evChan <- KeyboardEvent{EventType: EXIT, Key: ev.Key}
 			default:

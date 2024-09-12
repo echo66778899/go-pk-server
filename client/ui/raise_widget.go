@@ -59,6 +59,19 @@ func (r *RaiseWidget) SetCoordinator(x, y int) {
 }
 
 func (r *RaiseWidget) Increase(base int) {
+	if base <= 0 {
+		base = 20
+	}
+	if r.Data+base > base*2 {
+		if base >= 40 {
+			base = base / 2
+		}
+	} else if r.Data+base > base*4 {
+		if base >= 80 {
+			base = base / 4
+		}
+	}
+
 	if r.Data+base > r.MaxVal {
 		r.Data = r.MaxVal
 		return
@@ -67,9 +80,31 @@ func (r *RaiseWidget) Increase(base int) {
 }
 
 func (r *RaiseWidget) Decrease(base int) {
-	if r.Data-base < 0 {
-		r.Data = 20
+	if base <= 0 {
+		base = 20
+	}
+
+	if r.Data+base > base*2 {
+		if base >= 40 {
+			base = base / 2
+		}
+	} else if r.Data+base > base*4 {
+		if base >= 80 {
+			base = base / 4
+		}
+	}
+
+	if r.Data%20 != 0 {
+		r.Data = r.Data - r.Data%20
+	}
+	if r.Data-base <= 0 {
+		r.Data = base
 		return
 	}
+
 	r.Data -= base
+
+	if r.Data < base {
+		r.Data = base
+	}
 }

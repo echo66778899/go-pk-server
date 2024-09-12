@@ -76,8 +76,8 @@ func (c *Cards) SetCoodinate(x0, y0 int) {
 func (c *Cards) SetCards(cards []*msgpb.Card) {
 	c.Cards = cards
 	//y := c.x0 + len(c.Cards)*8
-	y := c.x0 + 5*8
-	c.SetRect(c.x0, c.y0, y+1, c.y0+7)
+	x1 := c.x0 + 5*8
+	c.SetRect(c.x0, c.y0, x1+3, c.y0+7)
 }
 
 func (c *Cards) Draw(buf *Buffer) {
@@ -93,7 +93,7 @@ func (c *Cards) Draw(buf *Buffer) {
 	//  └─────┘
 	for i := range c.Cards {
 		card := c.Cards[i]
-		x := c.Inner.Min.X + (i * 8)
+		x := c.Inner.Min.X + 1 + (i * 8)
 		y := c.Inner.Min.Y
 		style := cardStyle[card.GetSuit()]
 		buf.SetCell(Cell{TOP_LEFT, style}, image.Pt(x, y))

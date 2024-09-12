@@ -30,6 +30,7 @@ var (
 	btnCtrl    *ui.ButtonCtrlCenter
 	l          *ui.List
 	rankDisp   *ui.RankingText
+	showHand   *ui.Text
 )
 
 func initClient() {
@@ -39,7 +40,7 @@ func initClient() {
 
 	// New board of cards
 	board = ui.NewCards()
-	board.SetTitle("Community Cards")
+	// board.SetTitle("Community Cards")
 	board.SetCoodinate(ui.COMMUNITY_CARDS_X, ui.COMMUNITY_CARDS_Y)
 
 	// New central text box
@@ -77,10 +78,18 @@ func initClient() {
 
 	// Ranking display
 	rankDisp = ui.NewRankingText()
+
+	// Show hand status
+	showHand = ui.NewText()
+	showHand.Text = "SHOWING.."
+	showHand.IsVisible = false
+	showHand.TextStyle = ui.NewStyle(ui.ColorGreen)
+	showHand.SetRect(ui.PLAYER_LAYOUT[2][0].X+17, ui.PLAYER_LAYOUT[2][0].Y+7,
+		ui.PLAYER_LAYOUT[2][0].X+27, ui.PLAYER_LAYOUT[2][0].Y+8)
 }
 
 func render() {
-	uiItems := []ui.Drawable{table, board, centerText, dealerIcon, l}
+	uiItems := []ui.Drawable{table, board, centerText, dealerIcon, l, showHand}
 	uiItems = append(uiItems, playerWg.GetAllItems()...)
 	uiItems = append(uiItems, btnCtrl.GetDisplayingButton()...)
 	uiItems = append(uiItems, rankDisp.GetDisplayingTexts()...)
@@ -128,7 +137,7 @@ func getRoomInfoInput(selection string) (playerName, room, passcode, sessId stri
 
 	// Enter the authentication details
 	fmt.Println("+-------------------------------------------+")
-	fmt.Println("|  Welcome to the Poker Game Client v1.1.0  |")
+	fmt.Println("|  Welcome to the Poker Game Client v1.1.1  |")
 	fmt.Println("+-------------------------------------------+")
 	fmt.Print("-> Enter your name (no space): ")
 
@@ -358,16 +367,22 @@ func main() {
 				}
 				agent.SendingMessage(factoryAction(action))
 			case ui.RAISE:
-				// Raise min to double the current bet
-				agent.SendingMessage(factoryAction("raise", ui.UI_MODEL_DATA.CurrentBet))
+				raiseAmount := ui.UI_MODEL_DATA.CurrentBet
+				if raiseAmount < 20 {
+					raiseAmount = 20
+				}
+				// Raise min to double the current bet or 20 if first bet in round
+				agent.SendingMessage(factoryAction("raise", raiseAmount))
 			case ui.ALL_IN:
 				agent.SendingMessage(factoryAction("allin"))
-
-			// Menu buttons for testing
 			case ui.SPACE:
-				agent.SendingMessage(factoryCtrlMessage("sync_game_state"))
+				agent.SendingMessage(factoryCtrlMessage("show_your_hand",
+					int32(ui.UI_MODEL_DATA.YourTablePosition)))
 			case ui.BACKSPACE:
 				agent.SendingMessage(factoryCtrlMessage("request_game_end"))
+			case ui.REFRESH:
+				agent.SendingMessage(factoryCtrlMessage("sync_game_state"))
+				// Menu buttons for testingS
 			case ui.MENU1:
 				btnCtrl.SetMenu(ui.ButtonMenuType_PLAYING_BTN)
 				btnCtrl.EnableButtonCtrl(true)
@@ -399,22 +414,29 @@ func main() {
 		playerWg.UpdatePocketPair(ui.UI_MODEL_DATA.YourPrivateState)
 
 		// If current round is not SHOWDOWN, update all player's pocket pair
-		if ui.UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_SHOWDOWN &&
-			ui.UI_MODEL_DATA.Result != nil {
-
-			// Update the ranking display
-			rankDisp.UpdateTextsBasedPlayers()
-
-			for _, p := range ui.UI_MODEL_DATA.Result.ShowingCards {
-				if p != nil {
-					playerWg.UpdatePocketPairAtPosition(int(p.TablePos), p)
-					rankDisp.UpdateTextAtPosition(int(p.TablePos), p)
+		if ui.UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_SHOWDOWN {
+			if ui.UI_MODEL_DATA.Result != nil {
+				// Update the ranking display
+				rankDisp.UpdateTextsBasedPlayers()
+				// Showing cards all players
+				for _, p := range ui.UI_MODEL_DATA.Result.ShowingCards {
+					if p != nil {
+						playerWg.UpdatePocketPairAtPosition(int(p.TablePos), p)
+						rankDisp.UpdateTextAtPosition(int(p.TablePos), p)
+						if int(p.TablePos) == ui.UI_MODEL_DATA.YourTablePosition {
+							showHand.IsVisible = true
+						}
+					}
 				}
+			} else {
+				// Goto showdown but no result yet. Display the card if other player has shown
+				rankDisp.UpdateTextsBasedPlayers()
 			}
 		} else if ui.UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_INITIAL ||
 			ui.UI_MODEL_DATA.CurrentRound == msgpb.RoundStateType_PREFLOP {
 			// Clear all the pocket pair
 			rankDisp.ClearAllTexts()
+			showHand.IsVisible = false
 		}
 
 		board.SetCards(ui.UI_MODEL_DATA.CommunityCards)

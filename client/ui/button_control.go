@@ -27,6 +27,9 @@ type ButtonCtrlCenter struct {
 	// additional pannel
 	raisePannel *RaiseWidget
 
+	// call chips text
+	toCallChipTxt *CallChipText
+
 	// For control buttons
 	pauseGameBtn   *Button
 	startGameBtn   *Button
@@ -59,7 +62,8 @@ func NewButtonCtrlCenter() *ButtonCtrlCenter {
 		raiseBtn: NewButton("[R]aise", BNT_RaiseButton),
 		allInBtn: NewButton("[A]ll-In", BNT_AllInButton),
 
-		raisePannel: NewRaiseWidget(),
+		raisePannel:   NewRaiseWidget(),
+		toCallChipTxt: NewCallChipText(),
 
 		startGameBtn:   NewButton("[S]tart Game", BNT_StartGameButton),
 		pauseGameBtn:   NewButton("[P]ause Game", BNT_PauseGameButton),
@@ -88,8 +92,10 @@ func (b *ButtonCtrlCenter) InitButtonPosition() {
 	// Add the playing buttons to the list
 	b.PlayingButtons = []*Button{b.foldbtn, b.checkBtn, b.callBtn, b.raiseBtn, b.allInBtn}
 
+	b.toCallChipTxt.SetRect((b.X0*2+step*5)/2-2, b.Y-2, (b.X0*2+step*5)/2+6, b.Y-1)
+	// Set the center of the raise pannel
 	b.raisePannel.SetCoordinator((b.X0*2+step*7)/2+5, b.Y-8)
-	b.raisePannel.MaxVal = 5000
+	b.raisePannel.MaxVal = 10000
 
 	numberOfButton = 5
 	step = (CONTROL_PANEL_X_RIGHT - b.X0) / numberOfButton
@@ -110,16 +116,22 @@ func (b *ButtonCtrlCenter) GetDisplayingButton() []Drawable {
 	// Add shold be in order of the buttons
 	switch b.selectingBtnMenu {
 	case ButtonMenuType_PLAYING_BTN:
-		isRaiseSelected := false
+		isRaiseSelected, isCallVisible := false, false
 		drawables := make([]Drawable, len(b.PlayingButtons))
 		for i, btn := range b.PlayingButtons {
 			if btn.IsSelected() && btn.Type == BNT_RaiseButton {
 				isRaiseSelected = true
 			}
+			if btn.Type == BNT_CallButton && btn.IsEnabled() {
+				isCallVisible = true
+			}
 			drawables[i] = btn
 		}
 		if isRaiseSelected {
 			drawables = append(drawables, b.raisePannel)
+		}
+		if isCallVisible {
+			drawables = append(drawables, b.toCallChipTxt)
 		}
 		return drawables
 	case ButtonMenuType_CTRL_BTN:
@@ -246,6 +258,7 @@ func (b *ButtonCtrlCenter) Enter() {
 				b.enterEventHandler(int(btn.Type), convertToSlotNo(btn.Text))
 			} else if btn.Type == BNT_RaiseButton {
 				b.enterEventHandler(int(btn.Type), b.raisePannel.Data)
+				b.raisePannel.Data = 0
 			} else {
 				b.enterEventHandler(int(btn.Type))
 			}
@@ -264,7 +277,7 @@ func (b *ButtonCtrlCenter) MoveUp() {
 	switch b.selectingBtnMenu {
 	case ButtonMenuType_PLAYING_BTN:
 		if b.raiseBtn != nil && b.raiseBtn.IsSelected() {
-			b.raisePannel.Increase(20)
+			b.raisePannel.Increase(UI_MODEL_DATA.CurrentBet)
 		}
 	case ButtonMenuType_CTRL_BTN:
 	default:
@@ -280,7 +293,7 @@ func (b *ButtonCtrlCenter) MoveDown() {
 	switch b.selectingBtnMenu {
 	case ButtonMenuType_PLAYING_BTN:
 		if b.raiseBtn != nil && b.raiseBtn.IsSelected() {
-			b.raisePannel.Decrease(20)
+			b.raisePannel.Decrease(UI_MODEL_DATA.CurrentBet)
 		}
 	case ButtonMenuType_CTRL_BTN:
 	default:

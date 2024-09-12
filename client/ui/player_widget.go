@@ -178,6 +178,8 @@ func (pp *PlayerPanel) Draw(buf *Buffer) {
 			buf.SetCell(Cell{EXPANDED, NewStyle(ColorLightRed, ColorBlack, ModifierBold)},
 				image.Pt(pp.Inner.Min.X+2, pp.Inner.Min.Y+statusLine+1))
 			buf.SetCell(Cell{SHADED_BLOCKS[2], NewStyle(ColorRed)}, image.Pt(pp.Inner.Min.X+4, pp.Inner.Min.Y+statusLine+1))
+		} else {
+			buf.SetCell(Cell{SHADED_BLOCKS[2], NewStyle(ColorWhite)}, image.Pt(pp.Inner.Min.X+4, pp.Inner.Min.Y+statusLine+1))
 		}
 		// Draw cells chip icon
 		// Draw current bet amount

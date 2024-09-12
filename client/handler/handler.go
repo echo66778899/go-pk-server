@@ -39,6 +39,7 @@ func handleGameState(gs *msgpb.GameState) {
 	ui.UI_MODEL_DATA.DealerPosition = int(gs.DealerId)
 	ui.UI_MODEL_DATA.CurrentRound = gs.CurrentRound
 	ui.UI_MODEL_DATA.CurrentBet = int(gs.CurrentBet)
+	ui.UI_MODEL_DATA.Pot = int(gs.PotSize)
 
 	ui.UI_MODEL_DATA.YourPlayerState = nil
 	// Check if username is in the list of players
@@ -86,7 +87,6 @@ func handleGameState(gs *msgpb.GameState) {
 	case msgpb.RoundStateType_INITIAL:
 		ui.UI_MODEL_DATA.IsDealerVisible = true
 		ui.UI_MODEL_DATA.YourPrivateState = nil
-		ui.UI_MODEL_DATA.Pot = 0
 		ui.UI_MODEL_DATA.CommunityCards = nil
 		ui.UI_MODEL_DATA.Result = nil
 	case msgpb.RoundStateType_PREFLOP:
@@ -95,10 +95,8 @@ func handleGameState(gs *msgpb.GameState) {
 	case msgpb.RoundStateType_SHOWDOWN:
 		ui.UI_MODEL_DATA.IsDealerVisible = false
 		ui.UI_MODEL_DATA.Result = gs.FinalResult
-		ui.UI_MODEL_DATA.Pot = int(gs.PotSize)
 	default:
 		ui.UI_MODEL_DATA.IsDealerVisible = true
-		ui.UI_MODEL_DATA.Pot = int(gs.PotSize)
 	}
 
 	// Update UI state based on Your Player status
